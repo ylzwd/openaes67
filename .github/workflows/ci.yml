@@ -9,7 +9,10 @@ on:
 jobs:
   build-windows:
     name: build + self-test (windows)
-    runs-on: windows-latest
+    # Pinned on purpose: "windows-latest" moved to an image where the
+    # "Visual Studio 17 2022" generator is not found, which failed the configure
+    # step with "could not find any instance of Visual Studio".
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
@@ -55,9 +58,16 @@ jobs:
       - name: No licensing or activation logic
         shell: pwsh
         run: |
+          # Deliberately narrow. The first version of this check also matched
+          # "register" and "serial", which flagged `PcRegisterSubdevice` in the
+          # PortCls driver and the "register the class" comment in the ASIO host
+          # test -- legitimate code, red build. What must not exist is licensing
+          # *logic*: a key check, a trial timer, a phone-home to a licence server.
+          $patterns = 'licen[cs]e[ _-]?key|activation[ _-]?code|product[ _-]?key|' +
+                      'serial[ _-]?number|trial[ _-]?expired|validation[ _-]?server'
           $hits = Get-ChildItem -Recurse -File -Include *.cpp,*.h |
-                  Select-String -Pattern 'license|activation|serial|register' -CaseSensitive:$false |
-                  Where-Object { $_.Line -notmatch 'SPDX|LICENSE file|MIT|licence' }
+                  Select-String -Pattern $patterns -CaseSensitive:$false |
+                  Where-Object { $_.Line -notmatch 'SPDX|LICENSE file|MIT|licence|license\.' }
           if ($hits) {
             $hits | ForEach-Object { Write-Host "::error file=$($_.Path),line=$($_.LineNumber)::$($_.Line.Trim())" }
             exit 1
