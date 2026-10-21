@@ -582,6 +582,13 @@ It takes the best of three runs and fails if any case is more than 10 % slower t
 `bench-baseline.txt`. `set OPENAES67_PERF_GATE=1` makes the build run it
 automatically (off by default: a timing gate on a busy machine fails for everyone).
 
+## Security
+
+OpenAES67 opens sockets and parses untrusted network input. If you find a
+problem in the RTP/SDP/SAP parsers, the WAV reader, the ASIO driver or the
+registration scripts, please report it privately — see
+[`SECURITY.md`](SECURITY.md). Do not open a public issue for it.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).

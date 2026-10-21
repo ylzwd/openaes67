@@ -1,0 +1,42 @@
+name: Feature request
+description: A capability that is missing, or that works differently than you need
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This project is deliberately small and standards-based. Requests that map
+        onto a published standard (AES67-2018, RFC 3550, RFC 4566, RFC 2974,
+        IEEE 1588) are far more likely to be accepted than ones that need a
+        vendor-specific behaviour.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Describe the situation, not the solution. What can you not do today?
+      placeholder: |
+        I want to record 16 channels from a Dante device into a DAW, but the ASIO
+        card exposes 64 channels and my DAW's track limit makes that awkward.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The behaviour you expect, as concretely as you can state it.
+
+  - type: input
+    id: standard
+    attributes:
+      label: Governing standard (if any)
+      placeholder: AES67-2018 §8.4 / RFC 3550 / none
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Workarounds matter — they often show the real requirement.

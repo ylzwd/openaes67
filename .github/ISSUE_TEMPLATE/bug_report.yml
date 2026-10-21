@@ -1,0 +1,79 @@
+name: Bug report
+description: Something does not work the way the documentation says it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please run `openaes67 doctor --iface <your NIC>` — it checks
+        the four things that cause most reports (wrong interface, multicast blocked,
+        ASIO driver not registered, no PTP grandmaster).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, what happened instead?
+      placeholder: |
+        Ran `recv --group 239.69.1.1 --port 5004 --channels 8` against a Dante
+        device in AES67 mode. Expected audio, heard silence. `lost` stayed 0 and
+        `packets` climbed, so the stream arrives.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      description: The full command line, with your addresses redacted if needed.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `openaes67 doctor`
+      description: Paste the whole block, including the summary line.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      placeholder: Windows 10 22H2 (19045) / Windows 11 24H2 (26100)
+    validations:
+      required: true
+
+  - type: input
+    id: nic
+    attributes:
+      label: Network adapter
+      description: Model matters — USB adapters have no hardware timestamping.
+      placeholder: Intel I219-V (onboard) / ASIX AX88179 (USB)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: What is on the other end
+      options:
+        - Dante device in AES67 mode
+        - Another OpenAES67 instance
+        - The Python tools in tools/
+        - A different AES67 implementation (say which below)
+        - Nothing — tone or WAV loopback only
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: |
+        Statistics lines, exit codes, anything printed. For a crash, the Windows
+        Event Viewer entry for the faulting module.
+      render: shell
