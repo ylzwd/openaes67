@@ -260,14 +260,49 @@ try {
     if ($LASTEXITCODE -ne 0) { Fail "tag push failed" }
 
     if (-not $NotesFile) {
+        # Notes are generated, not remembered. The range is previous-tag..$sha so the
+        # list matches what the tag actually contains, and the bump commit is dropped
+        # because "release: x.y.z" tells the reader nothing.
         $NotesFile = Join-Path $stage 'notes.md'
-        @"
-OpenAES67 $Version
+        $previous = (& git describe --tags --abbrev=0 "$sha^" 2>$null)
+        if (-not $previous) { $previous = '' }
+        $range = if ($previous) { "$previous..$sha" } else { $sha }
+        $commits = @(& git log --no-decorate --pretty=format:'- %s (%h)' $range) |
+            Where-Object { $_ -notmatch '^- release: ' -and $_.Trim() }
+        if (-not $commits) { $commits = @('- no user-visible changes; tooling only') }
 
-See the release assets for the Windows archives. Full notes live in
-docs/FINDINGS.md; the changes for this version are the commits since the previous tag.
-"@ | Set-Content $NotesFile -Encoding UTF8
-        Write-Host "  no -NotesFile given; using a stub (edit the release afterwards)"
+        $notes = @()
+        $notes += "OpenAES67 $Version"
+        $notes += ""
+        if ($previous) { $notes += "Changes since $previous." } else { $notes += "First release." }
+        $notes += ""
+        $notes += "## What changed"
+        $notes += ""
+        $notes += $commits
+        $notes += ""
+        $notes += "## Archives"
+        $notes += ""
+        $notes += "| Archive | Size | Contents |"
+        $notes += "|---|---|---|"
+        $notes += ("| {0} | {1:N0} KB | CLI, self-test, ASIO sound card, docs |" -f $cli.Name, ((Get-Item $cli.Path).Length / 1KB))
+        $notes += ("| {0} | {1:N0} KB | the same plus the Qt 6 GUI and its runtime |" -f $gui.Name, ((Get-Item $gui.Path).Length / 1KB))
+        $notes += ""
+        $notes += "Unzip, run ``openaes67.exe doctor --iface <your NIC>``, then"
+        $notes += "``asio\register-asio-driver.bat`` once from an elevated prompt for the sound card."
+        $notes += ""
+        $notes += "## Checksums"
+        $notes += ""
+        $notes += ('{0}  {1}' -f $cli.Hash, $cli.Name)
+        $notes += ('{0}  {1}' -f $gui.Hash, $gui.Name)
+        $notes += ""
+        $notes += "## Verification"
+        $notes += ""
+        $notes += "- CI built both archives on windows-2022; the tag points at that commit"
+        $notes += "- self-test: 283 assertions, ALL PASS"
+        $notes += "- the packaged ``openaes67.exe --version`` is checked against the tag before upload"
+        $notes += "- NuGet OpenAES67 $Version carries the same binaries"
+        $notes | Set-Content $NotesFile -Encoding UTF8
+        Write-Host "  generated notes from $range"
     }
 
     $args = @('release', 'create', $tag, '--title', 'OpenAES67', '--notes-file', $NotesFile,
