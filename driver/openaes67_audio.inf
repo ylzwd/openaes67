@@ -1,0 +1,74 @@
+; OpenAES67 virtual audio device.
+;
+; A KS (kernel streaming) audio function driver: MEDIA class, one render
+; endpoint, registered under KSCATEGORY_AUDIO and KSCATEGORY_RENDER.
+;
+; Validated by Inf2Cat as part of driver\build-driver.bat. It has NOT been
+; installed: this machine runs with Secure Boot enabled, so a test-signed driver
+; package cannot load (see docs/M6-FEASIBILITY.md).
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=MEDIA
+ClassGuid={4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider=%Provider%
+CatalogFile=openaes67_audio.cat
+DriverVer=
+PnpLockdown=1
+
+[SourceDisksNames]
+1=%DiskName%,,,
+
+[SourceDisksFiles]
+openaes67_audio.sys=1,,
+
+[DestinationDirs]
+DefaultDestDir=12
+
+[Manufacturer]
+%MfgName%=OpenAes67,NTamd64
+
+[OpenAes67.NTamd64]
+%DeviceDesc%=OpenAes67_Install, ROOT\OpenAes67Audio
+
+[OpenAes67_Install.NT]
+CopyFiles=OpenAes67_CopyFiles
+AddReg=OpenAes67_AddReg
+
+[OpenAes67_CopyFiles]
+openaes67_audio.sys
+
+[OpenAes67_Install.NT.Services]
+AddService=openaes67_audio,%SPSVCINST_ASSOCSERVICE%,OpenAes67_Service
+
+[OpenAes67_Service]
+DisplayName=%ServiceDesc%
+ServiceType=1
+StartType=3
+ErrorControl=1
+ServiceBinary=%12%\openaes67_audio.sys
+
+[OpenAes67_Install.NT.Interfaces]
+AddInterface=%KSCATEGORY_AUDIO%,%KSNAME_Wave%,OpenAes67_Interface
+AddInterface=%KSCATEGORY_RENDER%,%KSNAME_Wave%,OpenAes67_Interface
+
+[OpenAes67_Interface]
+AddReg=OpenAes67_Interface_AddReg
+
+[OpenAes67_Interface_AddReg]
+HKR,,CLSID,,%ProxyCLSID%
+HKR,,FriendlyName,,%DeviceDesc%
+
+[OpenAes67_AddReg]
+HKR,,CLSID,,%ProxyCLSID%
+
+[Strings]
+Provider="OpenAES67 contributors"
+MfgName="OpenAES67"
+DeviceDesc="OpenAES67 Virtual Audio"
+ServiceDesc="OpenAES67 Audio Driver"
+DiskName="OpenAES67 Audio Driver Package"
+KSCATEGORY_AUDIO="{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_RENDER="{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
+KSNAME_Wave="Wave"
+ProxyCLSID="{17CCA71B-ECD7-11D0-B908-00A0C9223196}"

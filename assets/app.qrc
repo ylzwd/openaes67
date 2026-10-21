@@ -1,0 +1,13 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <!-- The window icon must come from the project logo. Without an explicit
+         QIcon the window shows Qt's default icon, which is not ours. -->
+    <qresource prefix="/">
+        <file alias="openaes67.ico">openaes67.ico</file>
+        <file alias="openaes67-256.png">png/openaes67-256.png</file>
+        <file alias="openaes67-64.png">png/openaes67-64.png</file>
+        <file alias="openaes67-48.png">png/openaes67-48.png</file>
+        <file alias="openaes67-32.png">png/openaes67-32.png</file>
+        <file alias="openaes67-16.png">png/openaes67-16.png</file>
+    </qresource>
+</RCC>

@@ -1,0 +1,4 @@
+LIBRARY openaes67_asio64
+EXPORTS
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE

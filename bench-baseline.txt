@@ -1,0 +1,9 @@
+# OpenAES67 benchmark baseline: name value unit
+convert 64->2 609.369 Mframes/s
+convert 64->64 457.643 Mframes/s
+queue 2ch 2202.623 Mframes/s
+queue 64ch 663.184 Mframes/s
+ring 2ch 11099.549 Mframes/s
+ring 64ch 341.585 Mframes/s
+rtp pack+parse 35.430 Mops/s
+sdp build 4.019 us

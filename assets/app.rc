@@ -1,0 +1,39 @@
+// Windows resources for the OpenAES67 executables.
+//
+// The icon is generated from logo.png by tools\make-icon.ps1, which pads the
+// logo to a square and emits the seven sizes Windows asks for (16 to 256).
+//
+// Compiled by build.bat via rc.exe and by CMake automatically for MSVC.
+
+#include <windows.h>
+
+IDI_OPENAES67 ICON "openaes67.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    0,5,0,0
+ PRODUCTVERSION 0,5,0,0
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      0
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "OpenAES67 contributors"
+            VALUE "FileDescription",  "OpenAES67 - AES67 network audio"
+            VALUE "FileVersion",      "0.5.0.0"
+            VALUE "InternalName",     "openaes67"
+            VALUE "LegalCopyright",   "MIT License"
+            VALUE "OriginalFilename", "openaes67.exe"
+            VALUE "ProductName",      "OpenAES67"
+            VALUE "ProductVersion",   "0.5.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

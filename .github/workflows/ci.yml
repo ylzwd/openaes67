@@ -1,0 +1,97 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: build + self-test (windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Self-test
+        run: .\build\Release\openaes67_selftest.exe
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaes67-win64
+          path: |
+            build/Release/openaes67.exe
+            build/Release/openaes67_selftest.exe
+          if-no-files-found: error
+
+  policy:
+    name: policy checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The project is deliberately free of vendor identifiers, licence checks
+      # and telemetry. Enforce it rather than trusting reviewers to notice.
+      - name: No vendor identifiers in sources
+        shell: pwsh
+        run: |
+          # Scan the code and docs, not this workflow (which necessarily
+          # contains the pattern itself).
+          $hits = Get-ChildItem src,include,tools,tests,docs -Recurse -File -Include *.cpp,*.h,*.py,*.md,*.ps1 |
+                  Select-String -Pattern 'VSC' -CaseSensitive
+          if ($hits) {
+            $hits | ForEach-Object { Write-Host "::error file=$($_.Path),line=$($_.LineNumber)::$($_.Line.Trim())" }
+            exit 1
+          }
+          Write-Host "no vendor identifiers found"
+
+      - name: No licensing or activation logic
+        shell: pwsh
+        run: |
+          $hits = Get-ChildItem -Recurse -File -Include *.cpp,*.h |
+                  Select-String -Pattern 'license|activation|serial|register' -CaseSensitive:$false |
+                  Where-Object { $_.Line -notmatch 'SPDX|LICENSE file|MIT|licence' }
+          if ($hits) {
+            $hits | ForEach-Object { Write-Host "::error file=$($_.Path),line=$($_.LineNumber)::$($_.Line.Trim())" }
+            exit 1
+          }
+          Write-Host "no licensing logic found"
+
+      - name: Python tools parse
+        shell: pwsh
+        run: |
+          python -m py_compile tools/aes67_tx.py tools/aes67_rx.py tools/ptp_master.py
+          Write-Host "python tools parse"
+  driver-build:
+    name: driver build (WDK, best effort)
+    runs-on: windows-latest
+    # The driver needs the WDK, which is not preinstalled on the hosted image and
+    # whose installer may refuse a silent install. A failure here must not turn
+    # the whole workflow red: the user-mode project is the shippable part.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install WDK 10.0.26100
+        shell: pwsh
+        run: |
+          winget install --id Microsoft.WindowsWDK.10.0.26100 -e --silent `
+            --disable-interactivity --accept-package-agreements --accept-source-agreements
+
+      - name: Build driver
+        shell: pwsh
+        run: .\driver\build-driver.bat
+
+      - name: Upload driver package
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaes67-driver
+          path: driver/out/audio/**
+          if-no-files-found: warn

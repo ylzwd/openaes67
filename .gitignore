@@ -1,0 +1,39 @@
+# build
+build*/
+build-qt/
+out/
+bin/
+obj/
+*.user
+*.suo
+# python
+__pycache__/
+*.pyc
+# test artifacts
+tests/*.wav
+tests/*.log
+tests/*.err
+# IDE
+.vs*/
+# release artifacts
+dist/
+# driver build output
+driver/out/
+driver/*.pfx
+driver/*.cer
+# driver build logs
+driver/*.log
+# ASIO SDK is not redistributable; only the placeholder README is tracked.
+third_party/asio/*
+!third_party/asio/README.md
+*.obj
+*.exe
+
+# private keys and certificates: test signing material must never be published,
+# wherever it is generated (driver/out, a temp dir, or a future script).
+*.pfx
+*.cer
+*.pvk
+*.snk
+*.key
+*.pem
