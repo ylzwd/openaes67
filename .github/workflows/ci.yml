@@ -25,6 +25,14 @@ jobs:
       - name: Self-test
         run: .\build\Release\openaes67_selftest.exe
 
+      # The sound card is the reason most people are here, and it needs only the
+      # MSVC toolset (the script finds vcvars itself). Building it in CI means the
+      # release archive can contain it, instead of asking every user to install a
+      # compiler before they can hear anything.
+      - name: Build the 64x64 ASIO sound card
+        shell: pwsh
+        run: .\asio_driver\build-asio-driver.bat
+
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
@@ -32,6 +40,16 @@ jobs:
           path: |
             build/Release/openaes67.exe
             build/Release/openaes67_selftest.exe
+          if-no-files-found: error
+
+      - name: Upload ASIO sound card
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaes67-asio64
+          path: |
+            asio_driver/out/openaes67_asio64.dll
+            asio_driver/register-asio-driver.bat
+            asio_driver/unregister-asio-driver.bat
           if-no-files-found: error
 
   policy:
