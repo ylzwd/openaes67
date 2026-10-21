@@ -8,5 +8,5 @@
 #pragma once
 
 #ifndef OPENAES67_VERSION
-#define OPENAES67_VERSION "0.1.0"
+#define OPENAES67_VERSION "0.1.1"
 #endif

@@ -20,7 +20,7 @@
     <NoWarn>NU5128;NU5110;NU5111</NoWarn>
     <Nullable>disable</Nullable>
     <PackageId>OpenAES67</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>OpenAES67 contributors</Authors>
     <Description>AES67 network audio for Windows with a 64-in / 64-out ASIO virtual sound card. Dante-compatible, MIT licensed.</Description>
     <PackageProjectUrl>https://github.com/ylzwd123/openaes67</PackageProjectUrl>

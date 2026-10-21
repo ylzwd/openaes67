@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OpenAES67 VERSION 0.1.0 LANGUAGES CXX)
+project(OpenAES67 VERSION 0.1.1 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "OpenAES67 targets Windows (WASAPI + KS/PortCls).")
