@@ -8795,3 +8795,115 @@ OpenAES67 0.1.0
 **版本号必须是"一处定义、多处引用、可被断言"。**
 只要它出现在两个地方，就一定会分叉；而分叉的版本号会在发布那一刻才暴露 ——
 那时候 tag 已经推出去了。
+---
+
+## 134. v0.1.1 发布中途被封号：把"发不出去"也当成一个状态
+
+### 发生了什么
+
+第一次用 `tools/release.ps1` 发 0.1.1，脚本跑到"等 CI"这一步就停了：
+
+```
+=== waiting for CI on c6a3616 ===
+  run 39622701358
+  gui build (Qt 6, best effort)    success
+  driver build (WDK, best effort)  success
+  policy checks                    success
+  build + self-test (windows)
+  FAILED: job 'build + self-test (windows)' concluded
+```
+
+`build` job 的结论是空字符串。看上去像构建失败，实际不是：运行级
+`conclusion` 是 `success`，四个 job 的**所有步骤**都已完成且 `success`。
+GitHub 的 job 列表接口比运行级接口晚几秒刷新 —— `gh run watch` 一返回就读
+job 列表，会读到 `status=in_progress`、`conclusion=""` 的陈旧数据。
+
+**教训**：别把"字段为空"当成"失败"。运行级结论才是权威，job 只在明确
+给出 `failure` / `cancelled` / `timed_out` 时才算失败。
+
+修好之后重跑，脚本正确地续上了（版本号幂等、无改动就不提交），
+然后在等 CI 时撞上了真正的问题：
+
+```
+gh: Sorry. Your account was suspended (HTTP 403)
+```
+
+`git ls-remote` 同样是 403：
+
+```
+remote: Your account is suspended. Please visit https://support.github.com
+```
+
+**账号被停用。** 不是网络，不是代理，不是脚本。
+
+### 现场（被封时）
+
+| 对象 | 状态 |
+|---|---|
+| 本地 `main` | `9f269c5`，工作区干净 |
+| 远端 `main` | `9f269c5`（最后一次成功推送，与本地一致） |
+| `v0.1.0` tag / Release / NuGet | 已发布（封号前） |
+| `v0.1.1` tag | **不存在** |
+| `v0.1.1` Release / NuGet | **不存在** |
+| 代码里的版本号 | `0.1.1`（已提交，未发布） |
+
+也就是说：**仓库自称 0.1.1，但最新的发布物是 0.1.0**。这个不一致是有意的 ——
+回退版本号会掩盖"已提交未发布"这个事实，而它正是恢复后要续跑的位置。
+
+### 恢复后怎么续
+
+不需要重做任何一步，`release.ps1` 在这个状态下是可续跑的：
+
+```powershell
+.\tools\release.ps1 -Version 0.1.1
+```
+
+它会看到版本号已经正确（幂等跳过）、构建、跑门禁、发现无改动（跳过提交）、
+等 CI 绿、下载产物、打 tag、发 Release、推 NuGet、再下载回来校验。
+
+前提是三件事都做过了：
+
+1. 账号恢复
+2. `gh auth status` 能正常返回（token 没被吊销）
+3. 若 token 被吊销，`gh auth login` 重新登录，并补回 `write:packages`
+
+### 为什么可能被封（不猜结论，只列事实）
+
+这次会话对 GitHub 的动作密度很高：建仓库、两次改仓库设置、加 topic、
+连续 6 次 CI 运行、两次发布、推 NuGet 包、数次强制移动 tag。
+对一个**新建账号**来说，这些特征和自动化滥用高度重合。
+
+值得记下的操作，如果重来一次会做得更谨慎：
+
+- **不要移动已发布的 tag。** 0.1.0 发布后我两次 `git tag -f` + `--force` 推送，
+  只为让 tag 对齐产物来源。已经在 `FINDINGS` 里写过 tag 该打在 CI 构建的提交上，
+  正确做法是**发布前**就把顺序定好，而不是发布后反复挪。
+- **短时间内不要连续触发多条流水线。** 6 次运行里有 3 次是为了修 CI 自身。
+  这些本可以在本地用 `act` 或直接读 YAML 避免。
+
+### 一个副产品：脚本现在真的被验证过了
+
+在此之前，`release.ps1` 只做过干跑。这一轮它实际跑到了：
+
+```
+preconditions  ✓（脏工作区、版本格式、tag 占用都会被拦）
+bump           ✓（三个文件都改对，重跑幂等）
+building       ✓（build.bat + ASIO，并核对 --version 输出）
+gates          ✓（自检、claims、scan、perf 全过）
+committing     ✓（无改动时正确跳过）
+waiting CI     ✓（发现并修掉 job 列表滞后）
+packaging      ✗ 没走到
+tagging        ✗ 没走到
+publishing     ✗ 没走到
+nuget          ✗ 没走到
+verify         ✗ 没走到
+```
+
+前六段已被真实执行验证，后四段仍只有干跑。
+
+### 教训
+
+**"发布"是一个有多方参与的状态机，本地脚本只能推进它，不能保证它推进得下去。**
+写发布脚本时，除了"做对每一步"，还要想清楚"停在半路时留下什么状态"——
+这次能续跑，是因为版本号替换幂等、空提交会跳过、版本号不回退。
+如果当初把版本号改回去"保持干净"，恢复后就得靠人回忆走到哪了。
