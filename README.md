@@ -102,7 +102,7 @@ for why, and what the equivalent workflow is.
 | `probe` format detection | ✅ | derives channels/codec/ptime from a live address, no SDP needed |
 | `bench` + baseline gate | ✅ | 8 cases; `--baseline` fails on a >15 % regression |
 | Config file | ✅ | `--config FILE`; unknown keys are startup errors |
-| Self-test | ✅ | **302 assertions**, no external framework |
+| Self-test | ✅ | **306 assertions**, no external framework |
 
 ### Measured (reproducible, see `docs/FINDINGS.md`)
 
@@ -146,7 +146,7 @@ Verify:
 
 ```powershell
 .\build\openaes67.exe help
-.\build\selftest.exe        # 302 assertions, must print ALL PASS
+.\build\selftest.exe        # 306 assertions, must print ALL PASS
 ```
 
 ### Build and register the 64×64 sound card
@@ -515,7 +515,7 @@ src/                 implementations, plus receive_loop.cpp shared by CLI and GU
 src/gui/             Qt 6 Widgets front end
 asio_driver/         64-in/64-out ASIO sound card (user-mode COM DLL)
 driver/              PortCls virtual audio driver (WDK; needs test signing)
-tests/selftest.cpp   302 assertions, no external framework
+tests/selftest.cpp   306 assertions, no external framework
 tools/               Python transmitter/receiver/grandmaster, soak and perf scripts
 assets/              icon set generated from logo.png
 docs/FINDINGS.md     every measurement, trap and dead end, in order

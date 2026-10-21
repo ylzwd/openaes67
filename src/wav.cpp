@@ -85,8 +85,21 @@ bool readWavPcm(const std::string &path, WavData *out, std::string *err) {
         }
         return false;
     }
-    if (channels == 0 || rate == 0) {
-        if (err) { *err = "invalid channel count or sample rate"; }
+    // Bounded, not merely non-zero. A file is untrusted input: a 44-byte header can
+    // claim 2000 channels at 1 Hz, and accepting it produced a WavData that nothing
+    // downstream could carry. These are the same limits the stream enforces
+    // (StreamConfig::validate), so "the reader accepted it" means "this build can
+    // send it".
+    if (channels < 1 || channels > 64) {
+        if (err) {
+            *err = "channel count " + std::to_string(channels) + " (expected 1..64)";
+        }
+        return false;
+    }
+    if (rate < 8000 || rate > 384000) {
+        if (err) {
+            *err = "sample rate " + std::to_string(rate) + " (expected 8000..384000)";
+        }
         return false;
     }
 

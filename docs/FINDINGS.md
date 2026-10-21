@@ -9148,3 +9148,74 @@ $l24 = (& cmd /c "`"$cliExe`" info --channels 64 --ptime 1 --codec L24 2>&1") -j
 
 反过来，这三处都验证了同一件事：**文档里的每句话都值得被一条断言锁住**。
 `verify-claims.ps1` 已经从"数字对不对"扩展到"CLI 到底打印什么"，这是这一轮最大的结构性收益。
+---
+
+## 137. WAV 读取器：又一个"只挡零、不挡上界"
+
+### 发现方式
+
+给 `--wav` 加畸形输入测试，断言是"**被接受的文件，其字段必须落在本系统能承载的范围内**"。
+第一次跑就红了：
+
+```
+[PASS] wav-fuzz: prepared a source file
+[PASS] wav-fuzz: read the source bytes back
+[FAIL] wav-fuzz: accepted files stay bounded by the file size
+[INFO] wav mutations: 84 accepted of 400, 16 unbounded
+[PASS] wav-fuzz: a truncated file never yields more samples than it holds
+```
+
+**84 个被接受的变异文件里，16 个字段不合理。** 原因在 `src/wav.cpp`：
+
+```cpp
+if (channels == 0 || rate == 0) {
+    if (err) { *err = "invalid channel count or sample rate"; }
+    return false;
+}
+```
+
+只挡了 0。WAV 头里的通道数是 `uint16`，采样率是 `uint32` —— 44 字节的头部可以声称
+**2000 个通道、1 Hz 采样率**，而读取器会照单全收，产出一个下游根本无法承载的 `WavData`。
+
+### 和 SDP 那个是同一类缺陷
+
+上一节（§135）修的是 SDP 解析器接受 99999 个通道。这里是 WAV 读取器接受 2000 个通道。
+**同一个错误出现在两个不同的输入边界上**，说明问题不在某一处疏忽，而在一种思维习惯：
+"零是非法值"很容易想到，"上界也是非法值"需要刻意去想。
+
+两次修复也用了同一个范围，来自 `StreamConfig::validate`：
+
+```
+channels  1..64
+rate      8000..384000
+```
+
+这样"读取器接受了"就等价于"这个构建能发出去"，不再有两套标准。
+
+### 测试本身的价值
+
+这个测试没有告诉我"可能有问题"，而是直接给出了证据：**84 个接受、16 个越界**。
+如果只是读代码，`channels == 0 || rate == 0` 这一行看起来完全正常 —— 它确实挡住了一部分坏输入。
+
+变异测试的价值就在这里：**它不检查你写了什么检查，它检查你没写的检查。**
+
+### 另一个已通过的断言
+
+```
+[PASS] wav-fuzz: a truncated file never yields more samples than it holds
+[INFO] wav truncations: 1378 tried, 0 overflow
+```
+
+对源文件的**每一个 7 字节前缀**都写一个文件并尝试读取（1378 次），确认没有一个被截断的文件
+能产出超过它自身长度的样本。这条本来就是对的 —— 读取器按 `dataBytes.size()` 分配。但"本来就是
+对的"和"有人改动后会知道"是两件事，所以它现在是一条断言。
+
+### 数字
+
+自检 302 → **306** 条。三份文档 7 处同步。
+
+### 教训
+
+**同一个错误会在不同的边界重复出现，直到你把边界检查变成一条测试。**
+SDP 那次修完，我以为事情结束了；WAV 这次证明没有 —— 只要还有"解析外部字节"的地方，
+就该有一条断言在问"上界呢"。

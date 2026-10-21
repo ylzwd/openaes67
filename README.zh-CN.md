@@ -94,7 +94,7 @@ RTP，而 Audition、Reaper、Pro Tools 打不开组播流。OpenAES67 接收它
 | `probe` 格式识别 | ✅ | 只听地址就能反推通道/编码/ptime，无需 SDP |
 | `bench` 与基线门禁 | ✅ | 8 个用例；`--baseline` 退化超过 15% 即失败 |
 | 配置文件 | ✅ | `--config FILE`；未知键是启动错误 |
-| 单元自检 | ✅ | **302 项单元自检**，无外部框架 |
+| 单元自检 | ✅ | **306 项单元自检**，无外部框架 |
 
 ### 实测数据（可复现，详见 `docs/FINDINGS.md`）
 
@@ -138,7 +138,7 @@ cmake --build build --config Release
 
 ```powershell
 .\build\openaes67.exe help
-.\build\selftest.exe        # 302 项断言，必须打印 ALL PASS
+.\build\selftest.exe        # 306 项断言，必须打印 ALL PASS
 ```
 
 ### 编译并注册 64×64 声卡
@@ -498,7 +498,7 @@ src/                 实现，以及 CLI 与 GUI 共用的 receive_loop.cpp
 src/gui/             Qt 6 前端
 asio_driver/         64 进 64 出 ASIO 声卡（用户态 COM DLL）
 driver/              PortCls 虚拟声卡驱动（WDK；需要测试签名）
-tests/selftest.cpp   302 项断言，无外部框架
+tests/selftest.cpp   306 项断言，无外部框架
 tools/               Python 收发/主时钟、长跑与性能脚本
 assets/              由 logo.png 生成的图标
 docs/FINDINGS.md     每一次测量、陷阱与死胡同，按时间顺序

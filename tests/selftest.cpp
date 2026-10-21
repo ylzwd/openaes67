@@ -1029,6 +1029,102 @@ int main() {
     }
 
 
+    // ---------------- malformed WAV input ----------------
+    // --wav accepts a file the user chose, so the reader is exposed to arbitrary
+    // bytes with a RIFF header. Whatever it accepts must stay bounded by the file:
+    // a declared size larger than the file, or a channel count of 99999, must not
+    // become an allocation.
+    {
+        const std::string goodPath = tempTestPath("selftest-wavsrc.wav");
+        std::vector<int16_t> tone(4800);
+        for (size_t i = 0; i < tone.size(); ++i) {
+            tone[i] = static_cast<int16_t>((i * 37) % 2000 - 1000);
+        }
+        check("wav-fuzz: prepared a source file",
+              writeWavPcm16(goodPath.c_str(), tone.data(), tone.size(), 2, 48000));
+
+        std::vector<uint8_t> bytes;
+        {
+            std::FILE *f = openFileUtf8(goodPath.c_str(), "rb");
+            if (f) {
+                std::fseek(f, 0, SEEK_END);
+                const long size = std::ftell(f);
+                std::fseek(f, 0, SEEK_SET);
+                bytes.resize(static_cast<size_t>(size));
+                if (size > 0) {
+                    const size_t got = std::fread(bytes.data(), 1, bytes.size(), f);
+                    bytes.resize(got);
+                }
+                std::fclose(f);
+            }
+        }
+        check("wav-fuzz: read the source bytes back", bytes.size() > 64);
+
+        auto nextRandom = [](uint32_t &state) {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        };
+
+        const std::string scratchPath = tempTestPath("selftest-wavmut.wav");
+        uint32_t state = 0x9e3779b9u;
+        int accepted = 0, unbounded = 0;
+        for (int i = 0; i < 400; ++i) {
+            std::vector<uint8_t> mutated = bytes;
+            const int edits = 1 + static_cast<int>(nextRandom(state) % 8);
+            for (int e = 0; e < edits; ++e) {
+                // Bias the mutations into the 44-byte header: that is where the
+                // sizes and counts live, and where a hostile file does its damage.
+                const size_t at = (nextRandom(state) % 3 == 0)
+                                      ? nextRandom(state) % mutated.size()
+                                      : nextRandom(state) % 44;
+                mutated[at] = static_cast<uint8_t>(nextRandom(state) & 0xFF);
+            }
+            {
+                std::FILE *f = openFileUtf8(scratchPath.c_str(), "wb");
+                if (!f) { continue; }
+                std::fwrite(mutated.data(), 1, mutated.size(), f);
+                std::fclose(f);
+            }
+            WavData out;
+            std::string err;
+            if (readWavPcm(scratchPath, &out, &err)) {
+                ++accepted;
+                const bool sane = out.channels >= 1 && out.channels <= 64 &&
+                                  out.sampleRate >= 8000 && out.sampleRate <= 384000 &&
+                                  (out.sourceBits == 16 || out.sourceBits == 24) &&
+                                  out.samples.size() <= mutated.size();
+                if (!sane) { ++unbounded; }
+            }
+        }
+        check("wav-fuzz: accepted files stay bounded by the file size", unbounded == 0);
+        std::printf("    [INFO] wav mutations: %d accepted of 400, %d unbounded\n",
+                    accepted, unbounded);
+
+        // Truncation is the common real case: a download that stopped early.
+        int truncations = 0, truncationOverflow = 0;
+        for (size_t cut = 0; cut < bytes.size(); cut += 7) {
+            std::vector<uint8_t> prefix(bytes.begin(), bytes.begin() + cut);
+            std::FILE *f = openFileUtf8(scratchPath.c_str(), "wb");
+            if (!f) { continue; }
+            std::fwrite(prefix.data(), 1, prefix.size(), f);
+            std::fclose(f);
+            WavData out;
+            std::string err;
+            ++truncations;
+            if (readWavPcm(scratchPath, &out, &err)) {
+                if (out.samples.size() > prefix.size()) { ++truncationOverflow; }
+            }
+        }
+        check("wav-fuzz: a truncated file never yields more samples than it holds",
+              truncationOverflow == 0);
+        std::printf("    [INFO] wav truncations: %d tried, %d overflow\n", truncations,
+                    truncationOverflow);
+
+        std::remove(goodPath.c_str());
+        std::remove(scratchPath.c_str());
+    }
     // ---------------- 24-bit WAV round trip ----------------
     {
         const std::string path = tempTestPath("selftest-24.wav");
