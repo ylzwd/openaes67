@@ -1,3 +1,4 @@
+#include "openaes67/net.h"
 #include "openaes67/sdp.h"
 #include <sstream>
 
@@ -250,7 +251,13 @@ bool parseSdpStreamInfo(const std::string &sdp, SapStreamInfo *out) {
         info.codec = codec;
     }
 
-    info.usable = haveGroup && havePort && haveFormat && info.port != 0;
+    // The comment on SapStreamInfo says "usable" means the group is multicast, but
+    // this only checked that the field was non-empty. An announcement carrying
+    // c=IN IP4 10.0.0.1 therefore looked usable, and discovery would try to join a
+    // unicast address and fail later with a socket error instead of being ignored
+    // here. One predicate, used everywhere else in the program.
+    const bool groupIsMulticast = haveGroup && isMulticastIPv4(info.group);
+    info.usable = groupIsMulticast && havePort && haveFormat && info.port != 0;
     *out = info;
     return info.usable;
 }

@@ -1029,6 +1029,179 @@ int main() {
     }
 
 
+    // ---------------- SAP stream info: the usable flag means what it says ----------
+    {
+        const std::string good =
+            "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=Test\r\n"
+            "c=IN IP4 239.69.1.1/32\r\nt=0 0\r\n"
+            "m=audio 5004 RTP/AVP 96\r\na=rtpmap:96 L16/48000/8\r\n";
+        SapStreamInfo info;
+        check("sap-info: a well formed announcement is usable",
+              parseSdpStreamInfo(good, &info) && info.usable && info.group == "239.69.1.1" &&
+                  info.port == 5004 && info.channels == 8 && info.sampleRate == 48000);
+
+        const std::string unicast =
+            "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=Test\r\n"
+            "c=IN IP4 10.0.0.1/32\r\nt=0 0\r\n"
+            "m=audio 5004 RTP/AVP 96\r\na=rtpmap:96 L16/48000/8\r\n";
+        SapStreamInfo u;
+        check("sap-info: a unicast address is not usable",
+              !parseSdpStreamInfo(unicast, &u) && !u.usable);
+
+        const std::string insane =
+            "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=Test\r\n"
+            "c=IN IP4 239.69.1.1/32\r\nt=0 0\r\n"
+            "m=audio 5004 RTP/AVP 96\r\na=rtpmap:96 L16/48000/99999\r\n";
+        SapStreamInfo bad;
+        check("sap-info: an impossible channel count is not usable",
+              !parseSdpStreamInfo(insane, &bad) && !bad.usable);
+
+        const std::string recvOnly =
+            "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=Test\r\n"
+            "c=IN IP4 239.69.1.1/32\r\nt=0 0\r\n"
+            "m=audio 5004 RTP/AVP 96\r\na=recvonly\r\na=rtpmap:96 L16/48000/2\r\n";
+        SapStreamInfo r;
+        check("sap-info: recvonly is flagged", parseSdpStreamInfo(recvOnly, &r) && r.recvOnly);
+    }
+    // ---------------- malformed RTCP and PTP ----------------
+    // Both are network input. The parsers already bounds-check (there are comments in
+    // ptp.cpp about a past read past the end), so what these assertions add is
+    // regression pressure: the invariant that "accepted" implies "the required bytes
+    // were present" must survive future edits.
+    {
+        auto nextRandom = [](uint32_t &state) {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        };
+
+        // --- RTCP sender report ---
+        {
+            RtcpSenderReport sr;
+            sr.ssrc = 0xC0FFEE;
+            sr.ntp = 0x1234567890ABCDEFull;
+            sr.rtpTimestamp = 0x11223344;
+            sr.packetCount = 999;
+            sr.octetCount = 123456;
+            const std::string good = buildRtcpSenderReport(sr, "openaes67@192.0.2.10");
+            check("rtcp-fuzz: built a sender report", good.size() >= 28);
+
+            uint32_t state = 0x1234567u;
+            int accepted = 0, tooShort = 0;
+            for (int i = 0; i < 3000; ++i) {
+                std::vector<uint8_t> mutated(good.begin(), good.end());
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 4);
+                for (int e = 0; e < edits; ++e) {
+                    mutated[nextRandom(state) % mutated.size()] =
+                        static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t len = nextRandom(state) % (mutated.size() + 3);
+                RtcpSenderReport out;
+                if (parseRtcpSenderReport(mutated.data(), len, &out)) {
+                    ++accepted;
+                    // A parsed SR is 28 bytes plus one 24-byte block at most.
+                    const size_t blocks = static_cast<size_t>(out.blockCount);
+                    if (len < 28 + blocks * 24) { ++tooShort; }
+                }
+            }
+            check("rtcp-fuzz: a sender report is never parsed below its length", tooShort == 0);
+            check("rtcp-fuzz: senders reports still parse sometimes", accepted > 0);
+            std::printf("    [INFO] rtcp SR mutations: %d accepted, %d too short\n", accepted,
+                        tooShort);
+        }
+
+        // --- RTCP receiver report ---
+        {
+            RtcpReceptionStats stats;
+            stats.ssrc = 0xC0FFEE;
+            stats.fractionLost = 12;
+            stats.cumulativeLost = -3;
+            stats.highestSequence = 4000;
+            stats.jitter = 37;
+            const std::string good = buildRtcpReceiverReport(0xABCDEF, &stats, "r@192.0.2.10");
+            uint32_t state = 0x7654321u;
+            int accepted = 0, tooShort = 0;
+            for (int i = 0; i < 3000; ++i) {
+                std::vector<uint8_t> mutated(good.begin(), good.end());
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 4);
+                for (int e = 0; e < edits; ++e) {
+                    mutated[nextRandom(state) % mutated.size()] =
+                        static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t len = nextRandom(state) % (mutated.size() + 3);
+                RtcpReceptionStats out;
+                uint32_t reporter = 0;
+                if (parseRtcpReceiverReport(mutated.data(), len, &out, &reporter)) {
+                    ++accepted;
+                    if (len < 8) { ++tooShort; }
+                }
+            }
+            check("rtcp-fuzz: a receiver report is never parsed below 8 bytes", tooShort == 0);
+            check("rtcp-fuzz: receiver reports still parse sometimes", accepted > 0);
+            std::printf("    [INFO] rtcp RR mutations: %d accepted, %d too short\n", accepted,
+                        tooShort);
+        }
+
+        // --- RTCP SDES CNAME ---
+        {
+            RtcpSenderReport sr;
+            sr.ssrc = 1;
+            const std::string good = buildRtcpSenderReport(sr, "openaes67@192.0.2.10");
+            uint32_t state = 0x2468aceu;
+            int accepted = 0, impossible = 0;
+            for (int i = 0; i < 3000; ++i) {
+                std::vector<uint8_t> mutated(good.begin(), good.end());
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 5);
+                for (int e = 0; e < edits; ++e) {
+                    mutated[nextRandom(state) % mutated.size()] =
+                        static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t len = nextRandom(state) % (mutated.size() + 3);
+                std::string cname;
+                if (parseRtcpCname(mutated.data(), len, &cname)) {
+                    ++accepted;
+                    if (cname.size() > len) { ++impossible; }
+                }
+            }
+            check("rtcp-fuzz: cname is never longer than the datagram", impossible == 0);
+            std::printf("    [INFO] rtcp SDES mutations: %d accepted, %d impossible\n", accepted,
+                        impossible);
+        }
+
+        // --- PTP ---
+        {
+            uint8_t clockId[8] = {0x00, 0x0E, 0xC6, 0xFF, 0xFE, 0x37, 0x38, 0x07};
+            uint8_t packet[64] = {0};
+            const size_t goodLen = buildDelayReq(packet, sizeof(packet), 0, clockId, 7);
+            check("ptp-fuzz: built a delay request", goodLen >= kPtpHeaderSize);
+
+            uint32_t state = 0xfeedfaceu;
+            int accepted = 0, tooShort = 0, wrongVersion = 0;
+            for (int i = 0; i < 4000; ++i) {
+                uint8_t mutated[64];
+                std::memcpy(mutated, packet, goodLen);
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 4);
+                for (int e = 0; e < edits; ++e) {
+                    mutated[nextRandom(state) % goodLen] =
+                        static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t len = nextRandom(state) % (goodLen + 3);
+                PtpHeader header;
+                if (parsePtpHeader(mutated, len, &header)) {
+                    ++accepted;
+                    if (len < kPtpHeaderSize) { ++tooShort; }
+                    if (header.versionPtp != 2) { ++wrongVersion; }
+                }
+            }
+            check("ptp-fuzz: a header is never parsed below 34 bytes", tooShort == 0);
+            check("ptp-fuzz: version 2 is required", wrongVersion == 0);
+            check("ptp-fuzz: delay requests still parse sometimes", accepted > 0);
+            std::printf("    [INFO] ptp mutations: %d accepted, %d too short, %d wrong version\n",
+                        accepted, tooShort, wrongVersion);
+        }
+    }
+
     // ---------------- malformed WAV input ----------------
     // --wav accepts a file the user chose, so the reader is exposed to arbitrary
     // bytes with a RIFF header. Whatever it accepts must stay bounded by the file:

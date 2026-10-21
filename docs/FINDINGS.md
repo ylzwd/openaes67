@@ -9219,3 +9219,99 @@ rate      8000..384000
 **同一个错误会在不同的边界重复出现，直到你把边界检查变成一条测试。**
 SDP 那次修完，我以为事情结束了；WAV 这次证明没有 —— 只要还有"解析外部字节"的地方，
 就该有一条断言在问"上界呢"。
+---
+
+## 138. 把"边界检查"从个别地方变成习惯
+
+前两节修了 SDP 与 WAV 的上界（§135、§137）。这一节把同样的标准推到 RTCP、PTP 与 SAP 流信息，
+结果发现：**代码大多是对的，错的是"没人锁住它"。**
+
+### 1. RTCP 与 PTP：边界是对的，但没有测试
+
+逐个读下来，`parseRtcpSenderReport` / `parseRtcpReceiverReport` / `parseRtcpCname` 都有完整长度
+校验，`ptp.cpp` 里三处读时间戳之前都有 `len < kPtpHeaderSize + 10` 的检查 —— 注释还写着
+"used to make this read past the received buffer"，说明这是**当年踩过并修好的坑**。
+
+问题是：这些检查没有任何测试。下一任维护者把它挪一下、合并一下分支，没人会发现。
+
+于是加了 10 条不变量（3000–4000 次确定性变异 + 随机截断）：
+
+```
+[PASS] rtcp-fuzz: a sender report is never parsed below its length
+[INFO] rtcp SR mutations: 1550 accepted, 0 too short
+[PASS] rtcp-fuzz: a receiver report is never parsed below 8 bytes
+[INFO] rtcp RR mutations: 1261 accepted, 0 too short
+[PASS] rtcp-fuzz: cname is never longer than the datagram
+[INFO] rtcp SDES mutations: 110 accepted, 0 impossible
+[PASS] ptp-fuzz: a header is never parsed below 34 bytes
+[PASS] ptp-fuzz: version 2 is required
+[INFO] ptp mutations: 1050 accepted, 0 too short, 0 wrong version
+```
+
+注意每一条都**同时**断言"确实还能解析成功"（`accepted > 0`）。只断言"拒绝"的测试有个陷阱：
+把解析器改成永远返回 false，测试全绿。**两个方向都要断言**，否则锁住的是"拒绝能力"而不是"正确性"。
+
+### 2. SAP 的 `usable` 名不副实
+
+`SapStreamInfo` 的注释写着：
+
+```cpp
+bool usable = false;   // group is multicast and port/rate/channels are sane
+```
+
+实际判定是：
+
+```cpp
+info.usable = haveGroup && havePort && haveFormat && info.port != 0;
+```
+
+`haveGroup` 只检查了**非空**。于是一条 `c=IN IP4 10.0.0.1` 的公告会被判定为 usable ——
+发现流程会去加入一个单播地址，然后在 socket 层失败。错误信息出现在很远的地方，和真正的原因无关。
+
+修复是复用程序里已经存在、且 GUI、`doctor`、CLI 都在用的那个判断：
+
+```cpp
+const bool groupIsMulticast = haveGroup && isMulticastIPv4(info.group);
+info.usable = groupIsMulticast && havePort && haveFormat && info.port != 0;
+```
+
+**一个函数，一处语义。** 这条修复只有一行，但它消掉的是"同一个概念有五种实现"的隐患。
+
+顺带一个好消息：`usable` 里的 `haveFormat` 调用的正是 §135 修好的 `parseSdpAudioFormat`，
+所以"上界"那次的修复**自动传播到了 SAP 发现路径**，不需要第二次改动。这是把校验放在解析器层
+而不是调用层的回报。
+
+四条新断言：
+
+```
+[PASS] sap-info: a well formed announcement is usable
+[PASS] sap-info: a unicast address is not usable
+[PASS] sap-info: an impossible channel count is not usable
+[PASS] sap-info: recvonly is flagged
+```
+
+### 3. 一个测试设计上的自我纠正
+
+第一版 SAP 断言只写了 `!parseSdpStreamInfo(unicast, &u)`。如果想让它更有意义，还要断言
+"这条公告不是因为它压根没解析出来才被拒" —— 于是 `usable` 也被一起断言：
+
+```cpp
+check("sap-info: a unicast address is not usable",
+      !parseSdpStreamInfo(unicast, &u) && !u.usable);
+```
+
+单看前者，一个把所有输入都拒绝的解析器也能通过。
+
+### 4. 数字
+
+自检 306 → **320** 条。本轮新增：RTCP 6 条、PTP 4 条、SAP 4 条。
+
+### 教训
+
+**"代码是对的"和"代码被锁住是对的"是两种不同的状态。**
+RTCP 和 PTP 的边界检查写得很仔细，甚至带着过去事故的注释 —— 但它们没有任何测试。
+这种代码最危险的地方不是它现在错了，而是它**看起来不需要再看一眼**，直到某次重构把它弄坏。
+
+另一个具体收获：**校验放在越靠近输入的地方，收益越大。** `parseSdpAudioFormat` 加上界之后，
+SAP 发现路径自动获得同样的保护，一行没改。反过来，如果当初把上界检查写在 `main.cpp` 的
+参数校验里（那里确实也有），SAP 路径就永远不会受保护。
