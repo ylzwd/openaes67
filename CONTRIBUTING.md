@@ -29,7 +29,7 @@ accounts, no activation and no phone-home.
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 
-# Self-test: 283 assertions covering RTP, SDP, SAP, PTP, jitter buffer and rate control
+# Self-test: 296 assertions covering RTP, SDP, SAP, PTP, jitter buffer and rate control
 .\build\Release\openaes67_selftest.exe
 ```
 

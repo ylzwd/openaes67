@@ -1578,6 +1578,151 @@ int main() {
                     dt / iterations, iterations);
     }
 
+    // ---------------- malformed network input ----------------
+    // These parsers run on bytes an unauthenticated peer chose: AES67 has no
+    // transport security, so a malformed datagram is the expected input, not an
+    // exotic one. The mutations are deterministic (xorshift32 and fixed seeds), so
+    // a failure reproduces on any standard library.
+    {
+        auto nextRandom = [](uint32_t &state) {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        };
+
+        // --- SDP: whatever parses must be a stream this build can open ---
+        {
+            const std::string base =
+                "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=OpenAES67\r\n"
+                "c=IN IP4 239.69.1.1/32\r\nt=0 0\r\n"
+                "m=audio 5004 RTP/AVP 96\r\na=rtpmap:96 L16/48000/8\r\n";
+            uint32_t state = 0x5eed1234u;
+            int parsed = 0, impossible = 0;
+            for (int i = 0; i < 4000; ++i) {
+                std::string mutated = base;
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 4);
+                for (int e = 0; e < edits; ++e) {
+                    const size_t at = nextRandom(state) % mutated.size();
+                    mutated[at] = static_cast<char>(nextRandom(state) & 0xFF);
+                }
+                int ch = 0, sr = 0;
+                if (parseSdpAudioFormat(mutated, &ch, &sr)) {
+                    ++parsed;
+                    if (ch < 1 || ch > 64 || sr < 8000 || sr > 384000) {
+                        ++impossible;
+                    }
+                }
+            }
+            check("fuzz: sdp never yields an impossible format", impossible == 0);
+            check("fuzz: sdp still parses some mutations", parsed > 0);
+            std::printf("    [INFO] sdp mutations: %d parsed, %d impossible\n", parsed, impossible);
+        }
+
+        // --- SDP: absurd values must be refused outright ---
+        {
+            int ch = 0, sr = 0;
+            check("fuzz: sdp rejects 99999 channels",
+                  !parseSdpAudioFormat("a=rtpmap:96 L16/48000/99999\r\n", &ch, &sr));
+            check("fuzz: sdp rejects channel 0",
+                  !parseSdpAudioFormat("a=rtpmap:96 L16/48000/0\r\n", &ch, &sr));
+            check("fuzz: sdp rejects 1 Hz",
+                  !parseSdpAudioFormat("a=rtpmap:96 L16/1/2\r\n", &ch, &sr));
+            check("fuzz: sdp rejects negative channels",
+                  !parseSdpAudioFormat("a=rtpmap:96 L16/48000/-8\r\n", &ch, &sr));
+            check("fuzz: sdp accepts 64 channels at 96 kHz",
+                  parseSdpAudioFormat("a=rtpmap:96 L24/96000/64\r\n", &ch, &sr) && ch == 64 &&
+                      sr == 96000);
+        }
+
+        // --- SAP: the parsed body must stay inside the datagram ---
+        {
+            const std::string sdp = "v=0\r\no=- 1 1 IN IP4 192.0.2.10\r\ns=t\r\n";
+            const std::vector<uint8_t> good =
+                buildSapDatagram(false, sdp, "192.0.2.10", "o=- 1 1 IN IP4 192.0.2.10", 0x1234);
+            std::vector<uint8_t> mutated;
+            uint32_t state = 0xc0ffeeu;
+            int parsed = 0, overflow = 0;
+            for (int i = 0; i < 3000; ++i) {
+                mutated = good;
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 5);
+                for (int e = 0; e < edits; ++e) {
+                    const size_t at = nextRandom(state) % mutated.size();
+                    mutated[at] = static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                // Also exercise truncation: a datagram cut short by a partial read.
+                const size_t len = nextRandom(state) % (mutated.size() + 1);
+                SapAnnouncement announcement;
+                if (parseSapAnnouncement(mutated.data(), len, &announcement)) {
+                    ++parsed;
+                    if (announcement.sdp.size() > len) {
+                        ++overflow;
+                    }
+                }
+            }
+            check("fuzz: sap body never exceeds the datagram", overflow == 0);
+            check("fuzz: sap still parses some mutations", parsed > 0);
+            std::printf("    [INFO] sap mutations: %d parsed of 3000, %d overflow\n", parsed,
+                        overflow);
+        }
+
+        // --- RTP: a header is either rejected or fits the buffer ---
+        {
+            uint8_t packet[kRtpHeaderSize + 4] = {0};
+            RtpHeader original;
+            original.sequence = 0x1234;
+            original.timestamp = 0xDEADBEEF;
+            original.ssrc = 0xC0FFEE;
+            writeRtpHeader(packet, sizeof(packet), original);
+            uint32_t state = 0xabad1deau;
+            int parsed = 0, bad = 0;
+            for (int i = 0; i < 4000; ++i) {
+                uint8_t mutated[kRtpHeaderSize] = {0};
+                std::memcpy(mutated, packet, kRtpHeaderSize);
+                const int edits = 1 + static_cast<int>(nextRandom(state) % 3);
+                for (int e = 0; e < edits; ++e) {
+                    mutated[nextRandom(state) % kRtpHeaderSize] =
+                        static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t len = nextRandom(state) % (kRtpHeaderSize + 3);
+                RtpHeader header;
+                if (readRtpHeader(mutated, len, &header)) {
+                    ++parsed;
+                    if (len < kRtpHeaderSize || header.version != 2) {
+                        ++bad;
+                    }
+                }
+            }
+            check("fuzz: rtp header only parses inside the buffer", bad == 0);
+            check("fuzz: rtp still parses some mutations", parsed > 0);
+            RtpHeader tooShort;
+            check("fuzz: rtp rejects an 11-byte buffer",
+                  !readRtpHeader(packet, kRtpHeaderSize - 1, &tooShort));
+            std::printf("    [INFO] rtp mutations: %d parsed, %d out of bounds\n", parsed, bad);
+        }
+
+        // --- payload decoding: never write past the caller's capacity ---
+        {
+            uint32_t state = 0x0ddba11u;
+            int overflow = 0;
+            for (int i = 0; i < 2000; ++i) {
+                uint8_t payload[256];
+                for (size_t b = 0; b < sizeof(payload); ++b) {
+                    payload[b] = static_cast<uint8_t>(nextRandom(state) & 0xFF);
+                }
+                const size_t inSize = nextRandom(state) % (sizeof(payload) + 1);
+                const Codec codec = (nextRandom(state) & 1) ? Codec::L16 : Codec::L24;
+                const size_t capacity = nextRandom(state) % 128;
+                int16_t out[128] = {0};
+                const size_t produced = unpackPayload(codec, payload, inSize, out, capacity);
+                if (produced > capacity || produced > inSize) {
+                    ++overflow;
+                }
+            }
+            check("fuzz: unpack never exceeds the destination", overflow == 0);
+        }
+    }
+
     std::printf("%s (%d failure%s)\n",
                 failures == 0 ? "ALL PASS" : "FAILED",
                 failures, failures == 1 ? "" : "s");

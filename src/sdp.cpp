@@ -159,7 +159,16 @@ bool parseSdpAudioFormat(const std::string &sdp, int *channels, int *sampleRate,
                     const int ch = slash2 == std::string::npos
                                        ? 1
                                        : std::atoi(enc.substr(slash2 + 1).c_str());
-                    if (ch > 0 && sr > 0) {
+                    // Bounded on purpose: this text arrived over the network. The
+                    // parser used to accept any positive channel count, so
+                    // "L16/48000/99999" produced a stream description that nothing
+                    // downstream could carry, and that a receiver might size buffers
+                    // from. These are the same limits the CLI documents (1..64
+                    // channels, 8000..384000 Hz), so anything accepted here is a
+                    // stream this build can actually open.
+                    const bool chOk = ch >= 1 && ch <= 64;
+                    const bool srOk = sr >= 8000 && sr <= 384000;
+                    if (chOk && srOk) {
                         if (channels)   *channels = ch;
                         if (sampleRate) *sampleRate = sr;
                         if (codecOut)   *codecOut = codec;

@@ -8907,3 +8907,113 @@ verify         ✗ 没走到
 写发布脚本时，除了"做对每一步"，还要想清楚"停在半路时留下什么状态"——
 这次能续跑，是因为版本号替换幂等、空提交会跳过、版本号不回退。
 如果当初把版本号改回去"保持干净"，恢复后就得靠人回忆走到哪了。
+---
+
+## 135. 断网期间的开发：解析器上界、畸形输入、以及两句会误导人的话
+
+GitHub 账号仍处于停用状态，所有推送与发布都做不了，于是把时间花在本地能验证的事情上。
+
+### 1. SDP 解析器接受无限通道数（真 bug）
+
+`parseSdpAudioFormat` 原本的验收条件是 `ch > 0 && sr > 0`：
+
+```cpp
+if (ch > 0 && sr > 0) { ... return true; }
+```
+
+于是 `a=rtpmap:96 L16/48000/99999` 会被**接受**，返回 99999 个通道。这个函数处理的是网络上收到的
+SDP —— 一个伪造的 SAP 公告就能让接收端按 99999 通道去描述流。下游 `StreamConfig::validate`
+确实有 `1..64` 的检查，所以不能直接说成"可远程触发崩溃"，但**让解析器产出一个本系统根本无法承载的
+格式**本身就是缺陷：调用方要额外记得校验，任何新调用方都可能忘。
+
+修复是给解析器加上和 CLI 文档一致的边界：
+
+```cpp
+const bool chOk = ch >= 1 && ch <= 64;
+const bool srOk = sr >= 8000 && sr <= 384000;
+if (chOk && srOk) { ... }
+```
+
+**这样"解析成功"就等于"这个构建真的能开这条流"**，不再是两套标准。
+
+### 2. 畸形输入测试（自检 283 → 296）
+
+已有的 fuzz 用例只有两条（随机输入不崩、SAP 全截断安全）。补的是**不变量**：
+
+| 断言 | 守住什么 |
+|---|---|
+| `fuzz: sdp never yields an impossible format` | 4000 次变异后，凡是解析成功的，通道数必在 1..64、采样率必在 8000..384000 |
+| `fuzz: sdp rejects 99999 channels` 等 4 条 | 上面那个 bug 的回归锁 |
+| `fuzz: sdp accepts 64 channels at 96 kHz` | 边界内的合法值不能被误杀 |
+| `fuzz: sap body never exceeds the datagram` | 3000 次变异 + 随机截断，解析出的 SDP 长度不得超过收到的报文长度 |
+| `fuzz: rtp header only parses inside the buffer` | 4000 次变异后，只有 `len >= 12` 且 `version == 2` 才算解析成功 |
+| `fuzz: unpack never exceeds the destination` | 2000 次随机负载，写出的样本数不超过调用方给的容量，也不超过输入长度 |
+
+PRNG 用手写 xorshift32、种子固定。理由不是"避免依赖"，而是**失败必须能从种子单独复现** ——
+`std::mt19937` 的输出在不同标准库实现上一致，但 `std::uniform_int_distribution` 不保证，而这里
+每一处取模都直接影响变异位置。
+
+实测输出：
+
+```
+[INFO] sdp mutations: 2659 parsed, 0 impossible
+[INFO] sap mutations: 763 parsed of 3000, 0 overflow
+[INFO] rtp mutations: 709 parsed, 0 out of bounds
+```
+
+顺带说明：`sdp accepts 64 channels at 96 kHz` 是在**上界加上之后**才有意义的断言 —— 加边界
+最容易的失误是把合法的高通道数、高采样率一起拒掉。
+
+### 3. 两句会误导人的话
+
+**第一句：`ASIO capture is not implemented in this build`。**
+读者从这句话里拿不到任何下一步。准确的说法要窄得多：
+
+```
+'Madis UT44' is an ASIO driver.
+  ASIO exposes no loopback, so it cannot report what an application plays.
+  Capturing an interface's hardware inputs over ASIO needs the Steinberg SDK
+  (third_party/asio + OPENAES67_USE_OFFICIAL_ASIO_SDK); this build has none.
+  Use a WASAPI endpoint instead: 'openaes67 list-devices' and pass the
+  capture or loopback entry by name or index.
+```
+
+三种限制被混成了一句：ASIO 没有 loopback；采集硬件输入需要 SDK；这个构建没编 SDK。
+拆开写之后，用户知道**为什么**不行、以及**现在该怎么做**。
+
+**第二句：`no capture source matches 'Madis'`。**
+`list-devices` 明明把 ASIO 条目列在 "Inputs" 下，但按名字匹配的循环里有一句
+`if (!d.isAsio && ...)` —— ASIO 条目永远匹配不上。于是"从列表里复制的名字"会得到
+"没有匹配项"，比"不支持"更让人怀疑自己拼错了。
+
+去掉这个条件后，同样的输入会走到上面那段解释。**列表里出现的东西，就必须能被这个名字选中**，
+哪怕选中的结果是"这个不能用，原因是……"。
+
+### 4. 没做的事，以及为什么
+
+本来打算实现 ASIO 采集（`createAsioCaptureSource`），用仓库里自己写的 `asio_abi.h` 绕开 SDK。
+做到一半发现一个硬障碍：宿主需要向驱动查询 `IID_IASIO`，而那个 GUID 只存在于 Steinberg 的头文件里。
+我们自己的驱动对任意 IID 都返回对象（`QueryInterface` 故意不校验），所以在自己身上能跑通 —— 但这
+说明不了第三方驱动能用。
+
+**一个只对自己驱动有效的"ASIO 采集"是假功能。** 与其发布一个大概率在真实硬件上失败的实现，
+不如把限制讲清楚。这条记在这里，等有 SDK 和真实 ASIO 接口时再做。
+
+### 5. 门禁同步
+
+自检从 283 条涨到 296 条，`verify-claims.ps1` 立刻报了：
+
+```
+[FAIL] README.md assertion count            doc=283 actual=296
+[FAIL] CONTRIBUTING.md assertion count      doc=283 actual=296
+```
+
+这正是那道门禁存在的理由：**文档里的数字不是宣传，是断言**。三份文档（README 两个语言版本 +
+CONTRIBUTING）共 7 处已同步。
+
+### 教训
+
+**"不能验证的功能"和"能验证的缺陷"之间，要选后者。**
+断网的四十分钟里，写一个只在自己驱动上成立的 ASIO 采集，产出的是一个看起来漂亮、实则会误导
+用户的特性；而把 SDP 的上界补上、给解析器加不变量测试，产出的是**任何一次伪造公告都能触发的
+真实防护**。前者的价值取决于我猜得对不对，后者不取决于任何猜测。

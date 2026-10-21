@@ -431,7 +431,11 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             }
         } else {
             for (const auto &d : inputs) {
-                if (!d.isAsio && d.name.find(inDeviceName) != std::string::npos) {
+                // ASIO entries have to be matchable by name as well. Skipping them
+                // meant that a name copied straight out of list-devices produced
+                // "no capture source matches", which is a worse answer than "ASIO
+                // cannot do this, and here is why".
+                if (d.name.find(inDeviceName) != std::string::npos) {
                     match = &d;
                     break;
                 }
@@ -443,8 +447,17 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             return 2;
         }
         if (match->isAsio) {
+            // "Not implemented" left the reader with no way forward. The accurate
+            // statement is narrower: ASIO has no loopback interface, and reading
+            // another driver's inputs needs the Steinberg SDK, which cannot be
+            // redistributed and is therefore absent from a default build.
             std::fprintf(stderr,
-                         "ASIO capture is not implemented in this build; cannot open '%s'\n",
+                         "'%s' is an ASIO driver.\n"
+                         "  ASIO exposes no loopback, so it cannot report what an application plays.\n"
+                         "  Capturing an interface's hardware inputs over ASIO needs the Steinberg SDK\n"
+                         "  (third_party/asio + OPENAES67_USE_OFFICIAL_ASIO_SDK); this build has none.\n"
+                         "  Use a WASAPI endpoint instead: 'openaes67 list-devices' and pass the\n"
+                         "  capture or loopback entry by name or index.\n",
                          match->name.c_str());
             return 2;
         }
