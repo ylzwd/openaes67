@@ -97,6 +97,49 @@ jobs:
         run: |
           python -m py_compile tools/aes67_tx.py tools/aes67_rx.py tools/ptp_master.py
           Write-Host "python tools parse"
+  gui:
+    name: gui build (Qt 6, best effort)
+    # The GUI needs Qt, which costs a few minutes to install and a 12 MB runtime to
+    # ship. It is built separately so the CLI archive stays small, and a failure
+    # here must not sink the release: the CLI and the sound card are the parts that
+    # make audio work.
+    continue-on-error: true
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build-gui -G "Visual Studio 17 2022" -A x64
+
+      - name: Build
+        run: cmake --build build-gui --config Release --target openaes67_gui
+
+      - name: Collect the Qt runtime
+        shell: pwsh
+        run: |
+          $pkg = "build-gui/gui-package"
+          New-Item -ItemType Directory -Path $pkg -Force | Out-Null
+          Copy-Item build-gui/Release/openaes67_gui.exe $pkg
+          & windeployqt --release --no-translations --no-system-d3d-compiler `
+                        --no-opengl-sw --compiler-runtime "$pkg/openaes67_gui.exe"
+          if (-not (Test-Path "$pkg/platforms/qwindows.dll")) {
+            throw "windeployqt did not produce the platform plugin"
+          }
+
+      - name: Upload GUI package
+        uses: actions/upload-artifact@v4
+        with:
+          name: openaes67-gui-win64
+          path: build-gui/gui-package/**
+          if-no-files-found: error
+
   driver-build:
     name: driver build (WDK, best effort)
     runs-on: windows-latest
