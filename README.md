@@ -583,6 +583,23 @@ It takes the best of three runs and fails if any case is more than 10 % slower t
 `bench-baseline.txt`. `set OPENAES67_PERF_GATE=1` makes the build run it
 automatically (off by default: a timing gate on a busy machine fails for everyone).
 
+## Package feed
+
+Every release is also published as a NuGet package on GitHub Packages, which is
+handy for CI or for pinning a version:
+
+```bat
+dotnet nuget add source https://nuget.pkg.github.com/ylzwd123/index.json ^
+    -n openaes67 -u <github-user> -p <PAT-with-read:packages>
+nuget install OpenAES67 -Source openaes67
+```
+
+It contains `tools\openaes67.exe`, the self-test and the ASIO sound card under
+`tools\asio\`. Two things are worth knowing before you wire it into a pipeline:
+GitHub Packages requires authentication even for public packages, and this is a
+distribution package, not a library — `dotnet add package` gives you nothing to
+call. The release archives remain the recommended path.
+
 ## Security
 
 OpenAES67 opens sockets and parses untrusted network input. If you find a

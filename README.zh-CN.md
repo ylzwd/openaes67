@@ -512,6 +512,21 @@ bench-baseline.txt   性能基线，供 tools/verify-perf.ps1 使用
 
 ---
 
+## NuGet 包源
+
+每个版本同时发布到 GitHub Packages 上，便于 CI 使用或锁定版本：
+
+```bat
+dotnet nuget add source https://nuget.pkg.github.com/ylzwd123/index.json ^
+    -n openaes67 -u <github 用户名> -p <带 read:packages 的 PAT>
+nuget install OpenAES67 -Source openaes67
+```
+
+包内含 `tools\openaes67.exe`、自检程序与 `tools\asio\` 下的 ASIO 声卡。
+接进流水线前请先知道两点：GitHub Packages **即使是公开包也要求认证**；
+这是分发用的包，不是库 —— `dotnet add package` 拿不到任何可调用 API。
+终端用户仍建议使用 Release 里的压缩包。
+
 ## 已知限制
 
 - **WDM 驱动在 Secure Boot 开启时无法加载。** ASIO 声卡没有这个限制（它是用户态 DLL），

@@ -68,6 +68,36 @@ is a GitHub restriction, not a choice here, and it is why the release zip remain
 the recommended path for end users. This feed is for CI systems and for people who
 want version pinning.
 
+## Published
+
+`OpenAES67 0.1.0` is live:
+
+```
+https://github.com/users/ylzwd123/packages/nuget/package/OpenAES67
+```
+
+It is linked to the repository automatically (the nuspec carries
+`RepositoryUrl`), so it also shows in the repository's Packages sidebar.
+
+**Visibility stays `private` even though the repository is public.** GitHub does
+not expose a REST endpoint for changing NuGet package visibility (`PATCH
+/user/packages/...` returns 404); it is a switch on the package settings page:
+
+```
+https://github.com/users/ylzwd123/packages/nuget/OpenAES67/settings
+```
+
+This costs a consumer nothing: GitHub Packages requires authentication for NuGet
+downloads regardless of visibility, so `nuget install` needs a PAT either way.
+Public visibility only affects whether the package page is browsable.
+
+Verified with a clean restore:
+
+```
+dotnet restore  ->  ~/.nuget/packages/openaes67/0.1.0/tools/openaes67.exe --version
+                    OpenAES67 0.1.0
+```
+
 ## Caveat
 
 A NuGet package that only carries `tools\` is a distribution channel, not a library:
