@@ -21,6 +21,24 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The script is often launched from a shell whose PATH is not the user's (a harness,
+# a scheduled task, a trimmed terminal). Resolve the two external tools here rather
+# than failing three phases later, halfway through a release.
+function Resolve-Tool([string] $exe, [string[]] $candidates) {
+    if (Get-Command $exe -ErrorAction SilentlyContinue) { return }
+    foreach ($dir in $candidates) {
+        if ($dir -and (Test-Path (Join-Path $dir "$exe.exe"))) {
+            $env:Path = "$dir;$env:Path"
+            return
+        }
+    }
+    Write-Host "  FAILED: $exe not found on PATH (looked in: $($candidates -join ', '))" -ForegroundColor Red
+    exit 1
+}
+Resolve-Tool 'git' @("$env:ProgramFiles\Git\cmd", "${env:ProgramFiles(x86)}\Git\cmd")
+Resolve-Tool 'gh' @("$env:ProgramFiles\GitHub CLI", "$env:LOCALAPPDATA\Programs\GitHub CLI")
+Resolve-Tool 'dotnet' @("$env:ProgramFiles\dotnet")
 $root = Split-Path $PSScriptRoot -Parent
 $tag = "v$Version"
 
