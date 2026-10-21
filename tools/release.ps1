@@ -118,7 +118,14 @@ function Set-FileVersion([string] $relative, [string] $pattern, [string] $replac
     $path = Join-Path $root $relative
     $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     $updated = [regex]::Replace($text, $pattern, $replacement)
-    if ($updated -eq $text) { Fail "no version string matched in $relative" }
+    if ($updated -eq $text) {
+        # Re-running a release that stopped after the bump must not fail here.
+        if ($text -match [regex]::Escape($replacement)) {
+            Write-Host "  $relative (already at this version)"
+            return
+        }
+        Fail "no version string matched in $relative"
+    }
     [System.IO.File]::WriteAllText($path, $updated, [System.Text.UTF8Encoding]::new($false))
     Write-Host "  $relative"
 }
@@ -164,8 +171,13 @@ Write-Step "committing"
 Push-Location $root
 try {
     & git add -A | Out-Null
-    & git commit -m "release: $Version" | Out-Null
-    if ($LASTEXITCODE -ne 0) { Fail "commit failed" }
+    $pending = (& git status --porcelain)
+    if ($pending) {
+        & git commit -m "release: $Version" | Out-Null
+        if ($LASTEXITCODE -ne 0) { Fail "commit failed" }
+    } else {
+        Write-Host "  nothing to commit; the tree is already at $Version"
+    }
     $sha = (& git rev-parse HEAD).Trim()
     Write-Host "  $sha"
     & git push origin main | Out-Null
@@ -186,10 +198,25 @@ try {
     Write-Host "  run $runId"
     & gh run watch $runId --interval 20 --exit-status | Out-Null
     if ($LASTEXITCODE -ne 0) { Fail "CI failed on $sha; not tagging a red commit" }
+
+    # `gh run watch` returns as soon as the run reports completed, but the job list
+    # endpoint can still serve stale state for a few seconds: a job that finished
+    # green shows status=in_progress and an empty conclusion. Trusting that would
+    # abort a release that actually succeeded, so the run-level conclusion decides,
+    # and a job only fails the release when it reports a real failure.
+    $run = $null
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        $run = (& gh run view $runId --json status,conclusion) | ConvertFrom-Json
+        if ($run.status -eq 'completed') { break }
+        Start-Sleep -Seconds 4
+    }
+    if ($run.conclusion -ne 'success') { Fail "run $runId concluded '$($run.conclusion)'" }
+
     $jobs = (& gh run view $runId --json jobs) | ConvertFrom-Json
     foreach ($job in $jobs.jobs) {
-        Write-Host ("  {0,-32} {1}" -f $job.name, $job.conclusion)
-        if ($job.conclusion -ne 'success' -and $job.name -notmatch 'best effort') {
+        $state = if ($job.conclusion) { $job.conclusion } elseif ($job.status) { "$($job.status)/unknown" } else { 'unknown' }
+        Write-Host ("  {0,-32} {1}" -f $job.name, $state)
+        if ($job.conclusion -in @('failure', 'cancelled', 'timed_out')) {
             Fail "job '$($job.name)' concluded $($job.conclusion)"
         }
     }
