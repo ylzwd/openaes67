@@ -26,7 +26,12 @@ bool parseCodecName(const std::string &name, Codec *codec);
 // One AES67 audio stream (one direction).
 struct StreamConfig {
     std::string ifaceIp;      // local IPv4 of the NIC used for multicast
-    std::string group;        // e.g. "239.69.1.1"
+    // Defaults to the AES67/Dante media group. The CLI help has always promised
+    // this default, but the field was empty, so every command without an explicit
+    // --group failed with "group is not a multicast address" -- and `info` printed
+    // "group : :5004". A default here also means the GUI and the tests agree with
+    // the help text instead of each carrying its own idea of "unset".
+    std::string group = "239.69.1.1";
     uint16_t    port = 5004;
     int         channels = 2;
     int         sampleRate = 48000;

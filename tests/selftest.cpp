@@ -692,6 +692,24 @@ int main() {
         good.sampleRate = 48000;
         good.ptimeMs = 1.0;
         good.port = 5004;
+        // The defaults are part of the CLI contract: the help text promises
+        // "multicast group (default 239.69.1.1)" and the quick start relies on it.
+        // The group field was empty once, so every command without --group failed
+        // with "group is not a multicast address" while the help said otherwise.
+        {
+            const StreamConfig defaults;
+            check("config: default group is the Dante media group",
+                  defaults.group == "239.69.1.1");
+            check("config: default port is 5004", defaults.port == 5004);
+            check("config: default is 2 ch at 48 kHz",
+                  defaults.channels == 2 && defaults.sampleRate == 48000);
+            check("config: default ptime is 1 ms", defaults.ptimeMs == 1.0);
+            check("config: default codec is L16", defaults.codec == Codec::L16);
+            StreamConfig withIface;
+            withIface.ifaceIp = "192.0.2.10";
+            check("config: defaults validate once an interface is set",
+                  withIface.validate(nullptr).empty());
+        }
         check("config: accepts a normal stream", good.validate(nullptr).empty());
 
         StreamConfig c;

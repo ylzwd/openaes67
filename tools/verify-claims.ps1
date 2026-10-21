@@ -107,6 +107,22 @@ Write-Host "OpenAES67 claim verification"
                      $headerVersion -eq $reportedVersion
     Check 'version header matches CMake and the binary' $versionsAgree (
         "header=$headerVersion cmake=$cmakeVersion binary=$reportedVersion")
+
+    # --- the documented defaults must be the real defaults ---------------------
+    # The help text promised "multicast group (default 239.69.1.1)" while the field
+    # was empty, so every command without --group died with "group is not a
+    # multicast address". Run the CLI and read what it prints.
+    $infoOut = (& cmd /c "`"$cliExe`" info 2>&1") -join "`n"
+    Check 'info reports the default multicast group' ($infoOut -match 'group\s*:\s*239\.69\.1\.1:5004') `
+        (($infoOut -split "`n" | Where-Object { $_ -match '^\s*group' }) -join ' ')
+
+    # --- packet size must follow the codec, not assume L16 ---------------------
+    # 64 ch at 1 ms is 6144 bytes as L16 and 9216 as L24. The warning used to print
+    # the L16 number for both.
+    $l24 = (& cmd /c "`"$cliExe`" info --channels 64 --ptime 1 --codec L24 2>&1") -join "`n"
+    $l16 = (& cmd /c "`"$cliExe`" info --channels 64 --ptime 1 --codec L16 2>&1") -join "`n"
+    Check 'packet size warning follows the codec' ($l24 -match '9216 bytes/packet' -and $l16 -match '6144 bytes/packet') `
+        ("L24: " + (($l24 -split "`n" | Where-Object { $_ -match 'bytes/packet' }) -join ' '))
 Write-Host ""
 
 # ---- build flags -----------------------------------------------------------

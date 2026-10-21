@@ -9017,3 +9017,134 @@ CONTRIBUTING）共 7 处已同步。
 断网的四十分钟里，写一个只在自己驱动上成立的 ASIO 采集，产出的是一个看起来漂亮、实则会误导
 用户的特性；而把 SDP 的上界补上、给解析器加不变量测试，产出的是**任何一次伪造公告都能触发的
 真实防护**。前者的价值取决于我猜得对不对，后者不取决于任何猜测。
+---
+
+## 136. 三个"文档说一套、代码做另一套"的缺陷
+
+继续断网期间的开发。这一轮的共同点是：**帮助文本、文档和实际行为三者不一致**，而且都能用一条命令复现。
+
+### 1. `--group` 根本没有默认值（最严重）
+
+帮助文本写着：
+
+```
+--group G        multicast group (default 239.69.1.1)
+```
+
+但 `StreamConfig` 里那一行是：
+
+```cpp
+std::string group;        // e.g. "239.69.1.1"
+```
+
+没有初始化。结果是**不带 `--group` 的任何命令都直接失败**：
+
+```
+$ openaes67 tx --iface 127.0.0.1 --channels 2
+group  is not a multicast address (expected 224.0.0.0 - 239.255.255.255)
+```
+
+`info` 还打印出 `group      : :5004` —— 一个空组址加端口，看起来像解析错误。
+
+这是发布版里真实存在的可用性缺陷：照帮助文本写命令的用户会撞上它。修复是给字段一个默认值：
+
+```cpp
+std::string group = "239.69.1.1";
+```
+
+选在 `StreamConfig` 而不是 `main.cpp` 里赋值，是因为 GUI 和测试也用这一个结构体 —— 让三处共享同一个"默认"，而不是各写一份。
+
+顺带确认了没有代码把"空 group"当作"未设置"的哨兵：四处 `group.empty()` 判断都作用于**别的**字段
+（`sendGroup`、SDP 里解析出的 `where.group`），不受影响。
+
+### 2. 包大小警告按 L16 计算，对 L24 少报三分之一
+
+```cpp
+if (cfg.framesPerPacket() * cfg.channels * 2 > 1400) {
+    ... "is %d bytes/packet" ...
+}
+```
+
+那个 `* 2` 写死成 L16 的样本宽度。L24 是 3 字节，于是 64 通道 1 ms：
+
+| 编解码器 | 真实负载 | 旧代码打印 |
+|---|---|---|
+| L16 | 6144 B | 6144 B ✓ |
+| L24 | 9216 B | **6144 B** ✗ |
+
+**它不仅判断阈值偏低，还把错误数字当成事实打印出来** —— 比不警告更糟。
+
+修复后同时给出两个可执行的数字，而不是只说"超过 MTU 了"：
+
+```
+warning: 64 ch @ 1 ms L24 is 9216 bytes/packet, above a 1440-byte MTU
+  it will be fragmented; use --channels 10 or --ptime 0.146
+```
+
+`1440` 是 1500 减去 IPv4 20 + UDP 8 + RTP 12，再向下取整到 16 的倍数，定义为
+`kSafePayloadBytes`，注释里写明来历。
+
+### 3. `list-devices` 里列出的 ASIO 名字，用名字选不中
+
+上一轮改了 ASIO 拒绝时的提示文本，但这条分支**只能通过索引触发**：名字匹配循环里有一句
+`if (!d.isAsio && ...)`。于是"从列表里复制名字"的路径得到的是 `no capture source matches`，
+而不是那段解释。
+
+列表里出现的东西就必须能被这个名字选中。去掉条件后：
+
+```
+$ openaes67 send --in-device "Madis"
+'Madis UT44' is an ASIO driver.
+  ASIO exposes no loopback, so it cannot report what an application plays.
+  ...
+```
+
+### 4. 三条回归锁
+
+自检 296 → **302** 条。新增的六条锁的是默认值，因为**默认值是最容易在重构中丢失、又最容易被文档背书的契约**：
+
+```
+[PASS] config: default group is the Dante media group
+[PASS] config: default port is 5004
+[PASS] config: default is 2 ch at 48 kHz
+[PASS] config: default ptime is 1 ms
+[PASS] config: default codec is L16
+[PASS] config: defaults validate once an interface is set
+```
+
+`verify-claims.ps1` 加了两条**跑真实 CLI 并读输出**的检查：
+
+```
+[PASS] info reports the default multicast group      group      : 239.69.1.1:5004
+[PASS] packet size warning follows the codec         L24: ... is 9216 bytes/packet ...
+```
+
+这两条直接锁住上面两个缺陷：如果再有人把默认值删掉、或者把 `* 2` 写回去，门禁立刻红。
+
+### 5. 一个 PowerShell 陷阱
+
+加门禁时踩到：PowerShell 5.1 把**原生程序的 stderr 当作 ErrorRecord**，而脚本开头是
+`$ErrorActionPreference = 'Stop'`。于是 `& $cliExe info ... 2>&1` 在 CLI 打印警告时**终止脚本**：
+
+```
+openaes67.exe : warning: 64 ch @ 1 ms L24 is 9216 bytes/packet ...
++ FullyQualifiedErrorId : NativeCommandError
+=== CLAIMS BROKEN ===
+```
+
+而我要检查的正是那条警告。解法是经 `cmd /c` 调用，让 cmd 先把 stderr 合并进 stdout，
+PowerShell 看到的就只是文本：
+
+```powershell
+$l24 = (& cmd /c "`"$cliExe`" info --channels 64 --ptime 1 --codec L24 2>&1") -join "`n"
+```
+
+### 教训
+
+**"默认值"不是小事，它是文档承诺的一部分。**
+这一轮三个缺陷里最严重的那个，代码只有一行 —— 少了一个 `= "239.69.1.1"`。
+但它让帮助文本变成谎言，让快速开始的命令直接失败，还让 `info` 输出一行看起来像 bug 的
+`group : :5004`。**一行默认值的价值，等于所有引用它的文档。**
+
+反过来，这三处都验证了同一件事：**文档里的每句话都值得被一条断言锁住**。
+`verify-claims.ps1` 已经从"数字对不对"扩展到"CLI 到底打印什么"，这是这一轮最大的结构性收益。

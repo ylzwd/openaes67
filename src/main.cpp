@@ -54,6 +54,12 @@ using namespace openaes67;
 #endif
 static const char *kVersion = OPENAES67_VERSION;
 
+// Payload budget per packet: a 1500-byte MTU minus IPv4 (20), UDP (8) and RTP (12)
+// headers is 1460, rounded down to a multiple of 16. Above this the datagram is
+// fragmented at IP level, which works on a local NIC but not across switches that
+// drop fragments.
+constexpr int kSafePayloadBytes = 1440;
+
 static void usage() {
     std::printf(
         "OpenAES67 " OPENAES67_VERSION "\n"
@@ -474,11 +480,31 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             std::fprintf(stderr, "invalid stream parameters: %s\n", reason.c_str());
             return 1;
         }
-        if (cfg.framesPerPacket() * cfg.channels * 2 > 1400) {
+        // Bytes per sample depends on the codec. This used to assume L16, so an L24
+        // stream was warned about at two thirds of its real size: 64 ch at 1 ms is
+        // 6144 bytes as L16 but 9216 as L24, and the message printed the smaller
+        // number while claiming to describe the packet.
+        const int bytesPerSample = (cfg.codec == Codec::L24) ? 3 : 2;
+        const int framesPerPacket = cfg.framesPerPacket();
+        const int payloadBytes = framesPerPacket * cfg.channels * bytesPerSample;
+        if (payloadBytes > kSafePayloadBytes) {
+            // Two numbers the reader can act on: how many channels still fit at this
+            // packet time, and what packet time still fits at this channel count.
+            const int maxChannels = framesPerPacket > 0
+                                        ? kSafePayloadBytes / (framesPerPacket * bytesPerSample)
+                                        : 1;
+            const int safeFrames = cfg.channels > 0
+                                       ? kSafePayloadBytes / (cfg.channels * bytesPerSample)
+                                       : 0;
+            const double safePtime = cfg.sampleRate > 0
+                                         ? 1000.0 * safeFrames / cfg.sampleRate
+                                         : 0.01;
             std::fprintf(stderr,
-                         "warning: %d ch @ %g ms is %d bytes/packet, above a safe MTU\n",
-                         cfg.channels, cfg.ptimeMs,
-                         cfg.framesPerPacket() * cfg.channels * 2);
+                         "warning: %d ch @ %g ms %s is %d bytes/packet, above a %d-byte MTU\n"
+                         "  it will be fragmented; use --channels %d or --ptime %.3f\n",
+                         cfg.channels, cfg.ptimeMs, cfg.codec == Codec::L24 ? "L24" : "L16",
+                         payloadBytes, kSafePayloadBytes, maxChannels < 1 ? 1 : maxChannels,
+                         safePtime > 0.0 ? safePtime : 0.01);
         }
     }
 
