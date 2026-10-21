@@ -1,6 +1,6 @@
 # Audio devices
 
-Up to 0.5.0 every backend silently used the system default endpoint, which made
+In earlier builds every backend silently used the system default endpoint, which made
 a machine with an onboard codec, a virtual cable and a USB interface impossible
 to drive deliberately. There is now an explicit device choice in both the CLI and
 the GUI.

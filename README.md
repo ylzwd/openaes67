@@ -221,6 +221,7 @@ currently configured (no elevation needed). Remove it with
 | `shm-read` | drain a shared section and report what arrived |
 | `list-devices` | enumerate WASAPI endpoints and ASIO drivers |
 | `bench` | measure the hot paths; with `--baseline`, gate on them |
+| `version` | print the version and exit |
 | `help` | print the command and option summary |
 
 ### Workflow 1 — send this PC's audio to the network
@@ -679,6 +680,7 @@ It has no `--wav`: use `tx --wav FILE` to transmit a file.
 | `bench` | measure the hot paths; `--baseline FILE --write-baseline` records them, `--baseline FILE` fails on a regression over 15 % |
 | `capture-in` | record a real input endpoint to WAV (what a DAW would record) |
 | `shm-read` | drain a shared section and report what arrived |
+| `version` | print the version and exit |
 | `help` | print the option summary |
 
 **GUI** (`openaes67_gui.exe`)

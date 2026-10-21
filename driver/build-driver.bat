@@ -82,7 +82,7 @@ rem local (UTC+8) the current local date is still "tomorrow" in UTC, so the
 rem package counts as postdated and fails signability. Stamp yesterday.
 for /f %%d in ('powershell -NoProfile -Command "(Get-Date).AddDays(-1).ToString('MM/dd/yyyy')"') do set STAMPDATE=%%d
 copy /y "%ROOT%openaes67_probe.inf" . >nul
-"%BIN_X64%\stampinf.exe" -f openaes67_probe.inf -d %STAMPDATE% -v 0.5.0.0 -a x64
+"%BIN_X64%\stampinf.exe" -f openaes67_probe.inf -d %STAMPDATE% -v 0.1.0.0 -a x64
 if errorlevel 1 goto :fail
 
 echo === validating package (Inf2Cat) ===
@@ -121,7 +121,7 @@ copy /y openaes67_audio.sys "%OUT%\audio\" >nul
 copy /y "%ROOT%openaes67_audio.inf" "%OUT%\audio\" >nul
 rem stampinf writes the LOCAL date while Inf2Cat compares UTC, so stamp yesterday.
 for /f %%d in ('powershell -NoProfile -Command "(Get-Date).AddDays(-1).ToString('MM/dd/yyyy')"') do set STAMPDATE=%%d
-"%BIN_X64%\stampinf.exe" -f "%OUT%\audio\openaes67_audio.inf" -d %STAMPDATE% -v 0.5.0.0 -a x64
+"%BIN_X64%\stampinf.exe" -f "%OUT%\audio\openaes67_audio.inf" -d %STAMPDATE% -v 0.1.0.0 -a x64
 if errorlevel 1 goto :fail
 echo === validating the audio package ===
 "%BIN_X86%\Inf2Cat.exe" /driver:"%OUT%\audio" /os:10_X64

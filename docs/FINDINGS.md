@@ -8720,3 +8720,78 @@ git rev-list --objects --all | grep docs/.*\.png         -> 5（脱敏图）
 它的 117 条中间提交（包含若干次"我改了又改回来"）对后来者的价值，
 可能低于"从干净起点重新开始"的价值。判断标准不是提交数量，而是：
 **这些历史能否让下一个人更快地做对决定。** 如果不能，`FINDINGS.md` 是更好的载体。
+
+---
+
+## 133. 发布 v0.1.0：先把版本号变成一处真相
+
+### 冲突
+
+对外要发 **v0.1.0**，而仓库内部一直按里程碑叫 **0.5.0**：
+`CMakeLists.txt`、驱动 INF、`package-release.ps1` 的兜底值、GUI 的
+`setApplicationVersion` 全是 0.5.0。
+
+一个发布版如果 `--version` 说的和 tag 不一样，比不发还糟。所以先统一，再打 tag。
+
+### 三个坑
+
+**坑 1：版本宏根本没传到编译器。**
+第一版把 `/DOPENAES67_VERSION="0.1.0"` 加在 `build.bat` 的 `ASIO_DEF` 变量上，
+而那个变量只在"找到 ASIO SDK"的分支里被赋值。这台机器走的是另一条分支，
+于是宏未定义，程序打印 `0.0.0-dev`。**把版本放在会被条件跳过的位置，等于没放。**
+
+**坑 2：命令行定义有两处。**
+`build.bat` 与 `CMakeLists.txt` 各设一次，谁生效取决于谁编译，正是"两份真相"。
+
+**坑 3：GUI 自己硬编码了一份。**
+
+### 解法：头文件 + 门禁
+
+新增 `include/openaes67/version.h`：
+
+```cpp
+#ifndef OPENAES67_VERSION
+#define OPENAES67_VERSION "0.1.0"
+#endif
+```
+
+CLI 与 GUI 都包含它；CMake 仍用 `project(... VERSION 0.1.0)` 注入同名宏（值相同）。
+`tools/verify-claims.ps1` 增加一条：
+
+```
+[PASS] version header matches CMake and the binary   header=0.1.0 cmake=0.1.0 binary=0.1.0
+```
+
+它同时比对三处：头文件、CMake 的 `project VERSION`、以及 **`openaes67 --version` 的真实输出**。
+第三方只改一处就会红。
+
+### 另外加了 `--version`
+
+```
+$ openaes67 --version
+OpenAES67 0.1.0
+```
+
+`version` 也可以作为独立命令。README 的两份命令表都已补上（门禁要求每个选项有文档）。
+
+### 其余统一
+
+| 位置 | 改动 |
+|---|---|
+| `CMakeLists.txt` | `project(... VERSION 0.1.0)` |
+| `build.bat` | 删掉版本定义，交给头文件 |
+| GUI `setApplicationVersion` | 改用 `OPENAES67_VERSION` |
+| `driver/build-driver.bat` | `stampinf -v 0.1.0.0`（2 处） |
+| `tools/package-release.ps1` | 兜底版本 0.1.0 |
+| `tools/init-repo.ps1` | 默认提交信息 0.1.0 |
+| `docs/AUDIO-DEVICES.md` | "Up to 0.5.0" → "In earlier builds" |
+
+`FINDINGS.md` 里保留的 0.5.0 是历史记录（当时的构建日志、当时的里程碑），不改 ——
+它们描述的是"那时是什么"，不是"现在是什么"。本节就是那条分界线：**从 v0.1.0 起，
+对外版本号重新从 0 起算。**
+
+### 教训
+
+**版本号必须是"一处定义、多处引用、可被断言"。**
+只要它出现在两个地方，就一定会分叉；而分叉的版本号会在发布那一刻才暴露 ——
+那时候 tag 已经推出去了。

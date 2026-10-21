@@ -12,7 +12,7 @@
 
 .PARAMETER Version
     Version string used in the archive name. Defaults to the value in
-    CMakeLists.txt, or 0.5.0 when it cannot be read.
+    CMakeLists.txt, or 0.1.0 when it cannot be read.
 
 .PARAMETER WithGui
     Also package openaes67_gui.exe together with its Qt runtime.
@@ -38,7 +38,7 @@ try {
                  Select-Object -First 1
             if ($m) { $Version = $m.Matches[0].Groups[1].Value }
         }
-        if (-not $Version) { $Version = '0.5.0' }
+        if (-not $Version) { $Version = '0.1.0' }
     }
     Write-Host "packaging OpenAES67 $Version"
 

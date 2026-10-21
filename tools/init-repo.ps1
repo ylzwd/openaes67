@@ -14,7 +14,7 @@
 [CmdletBinding()]
 param(
     [string]$Branch = 'main',
-    [string]$Message = 'OpenAES67 0.5.0: AES67 send/receive, PTP sync, rate control, GUI'
+    [string]$Message = 'OpenAES67 0.1.0: AES67 send/receive, PTP sync, rate control, GUI'
 )
 
 # 'Continue', not 'Stop': git writes routine warnings to stderr and PowerShell

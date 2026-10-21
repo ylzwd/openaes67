@@ -211,6 +211,7 @@ cmake --build build-qt --config Release
 | `shm-read` | 排空共享内存并报告收到的内容 |
 | `list-devices` | 列出 WASAPI 端点与 ASIO 驱动 |
 | `bench` | 测量热路径；配合 `--baseline` 做退化门禁 |
+| `version` | 打印版本号并退出 |
 | `help` | 打印命令与参数摘要 |
 
 ### 场景一：把本机声音发到网络
@@ -647,6 +648,7 @@ MIT —— 见 [`LICENSE`](LICENSE)。
 | `bench` | 测量热路径；`--baseline FILE --write-baseline` 记录，`--baseline FILE` 退化超过 15% 即失败 |
 | `capture-in` | 把真实输入端点录成 WAV（DAW 会录到的内容） |
 | `shm-read` | 排空共享节并报告收到的内容 |
+| `version` | 打印版本号并退出 |
 | `help` | 打印参数摘要 |
 
 **图形界面**（`openaes67_gui.exe`）

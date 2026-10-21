@@ -35,6 +35,7 @@
 #include "openaes67/bench.h"
 #include "openaes67/bridge.h"
 #include "openaes67/cli_config.h"
+#include "openaes67/version.h"
 #include "openaes67/doctor.h"
 #include "openaes67/rtp_probe.h"
 #include "openaes67/text_encoding.h"
@@ -48,9 +49,15 @@
 
 using namespace openaes67;
 
+#ifndef OPENAES67_VERSION
+#define OPENAES67_VERSION "0.0.0-dev"
+#endif
+static const char *kVersion = OPENAES67_VERSION;
+
 static void usage() {
     std::printf(
-        "OpenAES67 - AES67 / Dante-compatible audio for Windows\n"
+        "OpenAES67 " OPENAES67_VERSION "\n"
+        "  AES67 / Dante-compatible audio for Windows\n"
         "\n"
         "usage:\n"
         "  openaes67 <command> [options]\n"
@@ -73,6 +80,7 @@ static void usage() {
         "  shm-read       drain a shared section and report what arrived\n"
         "  list-devices   list audio outputs (WASAPI endpoints and ASIO drivers)\n"
         "  bench          measure the hot paths; with --baseline, gate on them\n"
+        "  version        print the version and exit\n"
         "  help           this text\n"
         "\n"
         "common options:\n"
@@ -238,6 +246,10 @@ int main(int argc, char **argv) {
     const std::string cmd = argv[1];
     if (cmd == "-h" || cmd == "--help" || cmd == "help") {
         usage();
+        return 0;
+    }
+    if (cmd == "-v" || cmd == "--version" || cmd == "version") {
+        std::printf("OpenAES67 %s\n", kVersion);
         return 0;
     }
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(OpenAES67 VERSION 0.5.0 LANGUAGES CXX)
+project(OpenAES67 VERSION 0.1.0 LANGUAGES CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "OpenAES67 targets Windows (WASAPI + KS/PortCls).")
@@ -47,6 +47,7 @@ list(LENGTH OPENAES67_CORE_SOURCES OPENAES67_CORE_COUNT)
 message(STATUS "core sources: ${OPENAES67_CORE_COUNT} files")
 
 add_library(openaes67_core STATIC ${OPENAES67_CORE_SOURCES})
+target_compile_definitions(openaes67_core PUBLIC OPENAES67_VERSION="${PROJECT_VERSION}")
 
 target_include_directories(openaes67_core PUBLIC include)
 if(OPENAES67_WITH_ASIO)

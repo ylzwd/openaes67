@@ -55,6 +55,7 @@
 #include "openaes67/audio_io.h"
 #include "openaes67/config.h"
 #include "openaes67/engine.h"
+#include "openaes67/version.h"
 #include "openaes67/net.h"
 #include "openaes67/receive_loop.h"
 #include "openaes67/audio_devices.h"
@@ -1790,7 +1791,7 @@ int main(int argc, char **argv) {
         ~TimerGuard() { timeEndPeriod(1); }
     } timerGuard;
     QApplication::setApplicationName("OpenAES67");
-    QApplication::setApplicationVersion("0.5.0");
+    QApplication::setApplicationVersion(OPENAES67_VERSION);
 
     // The project logo, embedded via assets/app.qrc. Qt falls back to its own
     // default icon when no window icon is set, which is what this window used to

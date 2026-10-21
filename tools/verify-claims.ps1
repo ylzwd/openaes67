@@ -82,6 +82,31 @@ Write-Host "OpenAES67 claim verification"
     $scanClean = $LASTEXITCODE -eq 0
     Check 'no secrets or local paths in the tree' $scanClean (
         ($scanOutput | Select-Object -First 3) -join ' / ')
+
+    # --- the version string has one source of truth ---------------------------
+    # The release tag, the CMake project version and the string the binary prints
+    # must agree; during the 0.1.0 release they did not (the binary printed
+    # 0.0.0-dev because the macro never reached the compiler), and a release whose
+    # --version disagrees with its tag is worse than no release.
+    $versionHeader = Join-Path $root 'include\openaes67\version.h'
+    $cmakeFile = Join-Path $root 'CMakeLists.txt'
+    $headerVersion = $null
+    $cmakeVersion = $null
+    if (Test-Path $versionHeader) {
+        $m = Select-String -Path $versionHeader -Pattern '^#define OPENAES67_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"'
+        if ($m) { $headerVersion = $m.Matches[0].Groups[1].Value }
+    }
+    if (Test-Path $cmakeFile) {
+        $m = Select-String -Path $cmakeFile -Pattern 'project\(OpenAES67 VERSION ([0-9]+\.[0-9]+\.[0-9]+)'
+        if ($m) { $cmakeVersion = $m.Matches[0].Groups[1].Value }
+    }
+    $reported = (& $cliExe --version 2>&1) -join ''
+    $reportedMatch = [regex]::Match($reported, '([0-9]+\.[0-9]+\.[0-9]+)')
+    $reportedVersion = if ($reportedMatch.Success) { $reportedMatch.Groups[1].Value } else { '' }
+    $versionsAgree = $headerVersion -and $headerVersion -eq $cmakeVersion -and
+                     $headerVersion -eq $reportedVersion
+    Check 'version header matches CMake and the binary' $versionsAgree (
+        "header=$headerVersion cmake=$cmakeVersion binary=$reportedVersion")
 Write-Host ""
 
 # ---- build flags -----------------------------------------------------------
