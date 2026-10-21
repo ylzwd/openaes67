@@ -104,3 +104,41 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\scan-secrets.ps1
 
 同理，示例里的地址统一用文档地址（`192.0.2.x` / `198.51.100.x`）或通用私有地址
 （`192.168.1.x`），不要用本机实际值。
+
+## 发版
+
+一个版本号，一条命令：
+
+```powershell
+.\tools\release.ps1 -Version 0.2.0 -NotesFile notes.md
+```
+
+它按固定顺序做完整条链路：
+
+```
+改版本号（version.h / CMakeLists.txt / csproj）
+  -> build.bat + ASIO 声卡
+  -> 自检 + verify-claims + scan-secrets + verify-perf
+  -> 提交并推送
+  -> 等 CI 绿（红了就停，绝不给红提交打 tag）
+  -> 下载 CI 产物、打两个压缩包、算 SHA256
+  -> 打 tag 并推送
+  -> 建 GitHub Release 并上传附件
+  -> 推 NuGet 包
+  -> 重新下载所有附件校验哈希与版本
+```
+
+先看它要做什么，不动任何东西：
+
+```powershell
+.\tools\release.ps1 -Version 0.2.0 -DryRun
+```
+
+只做到"提交并等 CI 绿"就停（不 tag、不发 Release、不推 NuGet）：
+
+```powershell
+.\tools\release.ps1 -Version 0.2.0 -SkipPublish
+```
+
+注意：脚本不接受脏工作区、不接受的版本号格式、不允许 tag 已存在，
+并且要求本地 `main` 与 `origin/main` 同步 —— 这些都在动任何文件之前检查。
