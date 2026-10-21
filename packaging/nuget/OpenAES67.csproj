@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Packs the prebuilt Windows binaries as a NuGet package for GitHub Packages.
+
+    This is not a .NET library: no code is compiled, and the project exists only to
+    describe which files go where. `nuget install` (or a manual download) gives you
+    the CLI, the self-test and the ASIO sound card in one versioned artifact.
+
+    Users of a native tool will normally take the GitHub Release zip; this feed is
+    for people who want versions resolved by a package manager, or who mirror
+    binaries internally.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>NU5128;NU5110;NU5111</NoWarn>
+    <Nullable>disable</Nullable>
+    <PackageId>OpenAES67</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>OpenAES67 contributors</Authors>
+    <Description>AES67 network audio for Windows with a 64-in / 64-out ASIO virtual sound card. Dante-compatible, MIT licensed.</Description>
+    <PackageProjectUrl>https://github.com/ylzwd123/openaes67</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/ylzwd123/openaes67</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>aes67;dante;asio;network-audio;ptp</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageOutputPath>$(MSBuildThisFileDirectory)out</PackageOutputPath>
+  </PropertyGroup>
+
+  <!-- The binaries are produced by build.bat and the ASIO driver script. -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\openaes67.exe"
+          Pack="true" PackagePath="tools\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\build\selftest.exe"
+          Pack="true" PackagePath="tools\openaes67_selftest.exe" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\asio_driver\out\openaes67_asio64.dll"
+          Pack="true" PackagePath="tools\asio\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\asio_driver\register-asio-driver.bat"
+          Pack="true" PackagePath="tools\asio\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\asio_driver\unregister-asio-driver.bat"
+          Pack="true" PackagePath="tools\asio\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\asio_driver\README.md"
+          Pack="true" PackagePath="tools\asio\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\README.md"
+          Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\LICENSE"
+          Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -14,7 +14,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$excludeDirs = @('build', 'build-qt', 'dist', 'out', 'node_modules', '__pycache__', '.git')
+$excludeDirs = @('build', 'build-qt', 'dist', 'out', 'bin', 'obj', 'node_modules', '__pycache__', '.git')
 $codeExt = @('.cpp', '.h', '.hpp', '.c', '.bat', '.ps1', '.py', '.cmake', '.inf')
 $docExt = @('.md', '.txt', '.conf', '.sdp', '.json', '.yml', '.yaml')
 $findings = New-Object System.Collections.ArrayList
