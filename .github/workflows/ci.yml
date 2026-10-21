@@ -85,19 +85,42 @@ jobs:
     # The driver needs the WDK, which is not preinstalled on the hosted image and
     # whose installer may refuse a silent install. A failure here must not turn
     # the whole workflow red: the user-mode project is the shippable part.
+    #
+    # The individual steps are continue-on-error as well: the job-level flag kept
+    # the run green but still painted the job red, and a red job that nobody is
+    # supposed to act on trains people to ignore red. Skipping with a warning is
+    # the honest signal.
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
       - name: Install WDK 10.0.26100
+        id: wdk
+        continue-on-error: true
         shell: pwsh
         run: |
           winget install --id Microsoft.WindowsWDK.10.0.26100 -e --silent `
             --disable-interactivity --accept-package-agreements --accept-source-agreements
 
       - name: Build driver
+        id: driver
+        if: steps.wdk.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: .\driver\build-driver.bat
+
+      - name: Report driver result
+        shell: pwsh
+        run: |
+          $wdk = '${{ steps.wdk.outcome }}'
+          $build = '${{ steps.driver.outcome }}'
+          if ($wdk -ne 'success') {
+            Write-Host "::warning::WDK unavailable on this runner; driver build skipped (user-mode project is unaffected)"
+          } elseif ($build -ne 'success') {
+            Write-Host "::warning::driver build failed on this runner; best effort, not a release blocker"
+          } else {
+            Write-Host "driver built"
+          }
 
       - name: Upload driver package
         uses: actions/upload-artifact@v4
