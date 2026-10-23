@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 OpenAES67 contributors
+//
+// Every behaviour in this file is traceable to a published standard
+// (AES67-2018, RFC 3550, RFC 4566, RFC 2974, IEEE 1588) or to a
+// reproducible measurement recorded in docs/FINDINGS.md.
+
 // Minimal WDM driver used to prove the M6 toolchain end to end.
 //
 // This is NOT the audio driver. It exists to verify that this machine can

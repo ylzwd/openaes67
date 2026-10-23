@@ -607,6 +607,13 @@ problem in the RTP/SDP/SAP parsers, the WAV reader, the ASIO driver or the
 registration scripts, please report it privately — see
 [`SECURITY.md`](SECURITY.md). Do not open a public issue for it.
 
+## Trademarks
+
+ASIO is a registered trademark of Steinberg Media Technologies GmbH. Dante and
+Audinate are trademarks of Audinate, Ltd. OpenAES67 is not affiliated with,
+endorsed by, or sponsored by any of them; the names appear only to describe
+interoperability, and no vendor logo is used anywhere in this project.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).

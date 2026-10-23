@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 OpenAES67 contributors
+//
+// Every behaviour in this file is traceable to a published standard
+// (AES67-2018, RFC 3550, RFC 4566, RFC 2974, IEEE 1588) or to a
+// reproducible measurement recorded in docs/FINDINGS.md.
+
 // Config-file support for the CLI.
 //
 // A sound-card install is started by a script or a service, and repeating fifteen

@@ -42,3 +42,6 @@ third_party/asio/*
 packaging/nuget/bin/
 packaging/nuget/obj/
 packaging/nuget/out/
+
+# agent workspace data: local notes and session state, never part of the project
+.workbuddy/

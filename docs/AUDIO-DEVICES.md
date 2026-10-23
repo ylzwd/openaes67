@@ -75,18 +75,33 @@ empty list is never mistaken for a populated one:
 
 ### Why the backend is not enabled by default
 
-The ASIO interface and SDK belong to Steinberg. Their licence does not allow
-redistributing the SDK, so this repository ships **no** ASIO header. Two
-consequences, both deliberate:
+The ASIO interface belongs to Steinberg. Until 2025 the SDK was under a
+proprietary licence that forbade redistribution, so this repository shipped
+**no** ASIO header. Two consequences, both deliberate:
 
 - a clone builds without anyone having to accept a third-party licence;
 - the ASIO stub still *lists* installed drivers (registry data only) and explains
   why it cannot open them.
 
+**This changed on 2025-10-15: Steinberg now offers ASIO under GPLv3** as well as
+the original proprietary terms. That does not change the decision above, for one
+reason — GPLv3 is copyleft, so building against the GPLv3 SDK would oblige the
+*whole* project to be released under GPLv3. OpenAES67 is MIT. We therefore still
+ship no ASIO header, and instead declare the ABI ourselves in
+`asio_driver/asio_abi.h`: an ASIO driver is a COM object whose `IASIO` vtable
+layout is a published contract that hosts call through by offset. No Steinberg
+source is vendored, and the official header always wins when it is present
+(`OPENAES67_USE_OFFICIAL_ASIO_SDK`).
+
+ASIO is a registered trademark of Steinberg Media Technologies GmbH. It is used
+here only to describe compatibility; this project is not affiliated with or
+endorsed by Steinberg.
+
 ### Turning it on
 
 1. Download the ASIO SDK from Steinberg's developer page and accept their licence.
    The files needed are `iasiodrv.h`, `asio.h` and `asiosys.h` from `common/`.
+   Note that choosing the GPLv3 variant means your build inherits GPLv3.
 2. Put them in `third_party\asio\`.
 3. Rebuild:
 

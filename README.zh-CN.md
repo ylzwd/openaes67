@@ -573,6 +573,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\verify-perf.ps1
 它取三次运行的最好值，与 `bench-baseline.txt` 比较，任一用例慢 15% 以上即失败。
 `set OPENAES67_PERF_GATE=1` 可让构建末尾自动运行（默认关闭：忙的机器上计时门禁会误报）。
 
+## 商标声明
+
+ASIO 是 Steinberg Media Technologies GmbH 的注册商标。Dante 与 Audinate 是
+Audinate, Ltd. 的商标。本项目与上述任何一方无关联、未获背书或赞助；这些名称
+仅用于描述互操作性，本项目未使用任何厂商的标志图形。
+
 ## 许可证
 
 MIT —— 见 [`LICENSE`](LICENSE)。

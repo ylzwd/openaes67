@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 OpenAES67 contributors
+//
+// Every behaviour in this file is traceable to a published standard
+// (AES67-2018, RFC 3550, RFC 4566, RFC 2974, IEEE 1588) or to a
+// reproducible measurement recorded in docs/FINDINGS.md.
+
 #pragma once
 // Minimal declarations of the ASIO interface, written for this project.
 //
@@ -14,6 +21,11 @@
 // with OPENAES67_USE_OFFICIAL_ASIO_SDK; then the official header is used
 // instead and this file is skipped. Both paths must agree -- if they ever
 // disagree, the official one wins.
+//
+// Why not just take the official SDK? Steinberg has offered ASIO under GPLv3
+// since 2025-10-15, but GPLv3 is copyleft: building against that SDK would make
+// the whole project GPLv3. OpenAES67 is MIT, so it ships no Steinberg source at
+// all and declares the contract itself.
 //
 // Only the parts a driver and a test host need are declared here.
 
