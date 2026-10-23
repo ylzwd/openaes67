@@ -583,6 +583,10 @@ Audinate, Ltd. 的商标。本项目与上述任何一方无关联、未获背�
 
 MIT —— 见 [`LICENSE`](LICENSE)。
 
+发布压缩包内会再分发 MSVC 运行库，GUI 版本还会包含 Qt 6 运行库。这些是第三方
+组件，各自有独立许可；[`docs/THIRD-PARTY-NOTICES.md`](docs/THIRD-PARTY-NOTICES.md)
+列出了分发内容，以及为何满足 LGPL v3 的要求。
+
 ---
 
 ## 命令行参考

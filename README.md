@@ -618,6 +618,11 @@ interoperability, and no vendor logo is used anywhere in this project.
 
 MIT — see [`LICENSE`](LICENSE).
 
+The release archives redistribute the MSVC runtime and, in the GUI variant,
+the Qt 6 runtime. Those are third-party components under their own licences;
+[`docs/THIRD-PARTY-NOTICES.md`](docs/THIRD-PARTY-NOTICES.md) records what
+ships and why LGPL v3 is satisfied.
+
 ---
 
 ## CLI reference

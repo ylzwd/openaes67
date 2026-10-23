@@ -259,9 +259,23 @@ try {
         }
         New-Item -ItemType Directory -Path (Join-Path $pkg 'docs') | Out-Null
         Copy-Item (Join-Path $root 'docs\*.md') (Join-Path $pkg 'docs')
+        # Root-level copy of the third-party notices. LGPL section 6 wants the
+        # licence of a redistributed library to travel with the archive, and a
+        # reader who finds only docs/ may never open it. The GUI archive ships
+        # Qt, so this is not optional.
+        Copy-Item (Join-Path $root 'docs\THIRD-PARTY-NOTICES.md') (Join-Path $pkg 'THIRD-PARTY-NOTICES.md')
         if ($withGui) {
             $guiSrc = Join-Path $stage 'gui'
             Get-ChildItem $guiSrc | ForEach-Object { Copy-Item $_.FullName $pkg -Recurse -Force }
+            # A Qt kit built without its LICENSES/ directory would leave the
+            # archive with no Qt licence text. Fail here rather than publish an
+            # archive that cannot satisfy the notice we just added.
+            $qtLicence = Get-ChildItem $pkg -Recurse -Include 'LICENSE*','LICENSES' -ErrorAction SilentlyContinue |
+                         Where-Object { $_.FullName -match 'Qt|qt' }
+            if (-not $qtLicence) {
+                throw ("no Qt licence text found in the GUI archive -- add docs\THIRD-PARTY-NOTICES.md and " +
+                       "the Qt licence text before publishing this archive")
+            }
         }
         $zip = Join-Path $stage "$name.zip"
         Compress-Archive -Path $pkg -DestinationPath $zip -CompressionLevel Optimal

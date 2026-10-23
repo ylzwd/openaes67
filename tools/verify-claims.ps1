@@ -205,6 +205,26 @@ $activation = $sources | Where-Object { $_.Extension -in '.c', '.cpp', '.h' } |
               Select-String -Pattern 'activation|licen[cs]e key|ProductKey|WinVerifyTrust'
 Check 'no activation or licence-key logic' ($activation.Count -eq 0) "$($activation.Count) found"
 
+# ---- redistribution notices -------------------------------------------------
+# The archives ship the MSVC runtime and, in the GUI variant, the Qt runtime.
+# Both are third-party components under their own licences, and a redistributed
+# binary has to carry its licence text. A release built before this check existed
+# shipped neither, so the notice is asserted here rather than left to memory.
+$notices = Join-Path $root 'docs\THIRD-PARTY-NOTICES.md'
+$releaseScript = Get-Content (Join-Path $root 'tools\release.ps1') -Raw
+
+Check 'third-party notices exist' (Test-Path $notices) 'expects docs\THIRD-PARTY-NOTICES.md'
+Check 'archives include the notices' `
+    ($releaseScript -match 'THIRD-PARTY-NOTICES\.md') `
+    'release.ps1 must copy the notices into every archive'
+
+# A Qt build without LICENSES/ would leave the GUI archive unable to satisfy the
+# notice. release.ps1 throws in that case; assert the guard is still present so a
+# later edit cannot quietly remove the only check between build and publish.
+Check 'GUI archive requires Qt licence text' `
+    ($releaseScript -match 'no Qt licence text found') `
+    'release.ps1 must fail when the Qt licence text is absent'
+
 Write-Host ""
 # Also emit a machine-readable summary line: Write-Host output cannot be captured
 # by a caller's variable, the success stream can.
