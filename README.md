@@ -589,7 +589,7 @@ Every release is also published as a NuGet package on GitHub Packages, which is
 handy for CI or for pinning a version:
 
 ```bat
-dotnet nuget add source https://nuget.pkg.github.com/ylzwd123/index.json ^
+dotnet nuget add source https://nuget.pkg.github.com/ylzwd/index.json ^
     -n openaes67 -u <github-user> -p <PAT-with-read:packages>
 nuget install OpenAES67 -Source openaes67
 ```

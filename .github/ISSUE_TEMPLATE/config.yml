@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question or usage help
-    url: https://github.com/ylzwd123/openaes67/discussions
+    url: https://github.com/ylzwd/openaes67/discussions
     about: Ask how to configure a stream, a device or a network.
   - name: Security issue
-    url: https://github.com/ylzwd123/openaes67/security/advisories/new
+    url: https://github.com/ylzwd/openaes67/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.

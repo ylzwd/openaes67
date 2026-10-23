@@ -248,7 +248,7 @@ Export-PfxCertificate -Cert $c -FilePath '%PFX%' `
 
 ```
 [FAIL] no secrets or local paths in the tree
-  docs\COMPLIANCE-REVIEW.md:154  BEGIN PRIVATE KEY
+  docs\COMPLIANCE-REVIEW.md:154  <PEM 私钥头字面量>
 ```
 
 原因是我在本报告里**逐字写出了私钥特征串**用于说明「已扫描过」——扫描器按字面匹配，命中了。

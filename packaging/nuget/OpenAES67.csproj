@@ -23,9 +23,9 @@
     <Version>0.1.1</Version>
     <Authors>OpenAES67 contributors</Authors>
     <Description>AES67 network audio for Windows with a 64-in / 64-out ASIO virtual sound card. Dante-compatible, MIT licensed.</Description>
-    <PackageProjectUrl>https://github.com/ylzwd123/openaes67</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/ylzwd/openaes67</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <RepositoryUrl>https://github.com/ylzwd123/openaes67</RepositoryUrl>
+    <RepositoryUrl>https://github.com/ylzwd/openaes67</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>aes67;dante;asio;network-audio;ptp</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

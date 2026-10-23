@@ -47,7 +47,7 @@ gh auth refresh -h github.com -s write:packages
 ```powershell
 $token = gh auth token
 dotnet nuget push packaging\nuget\out\OpenAES67.0.1.0.nupkg `
-    --source https://nuget.pkg.github.com/ylzwd123/index.json `
+    --source https://nuget.pkg.github.com/ylzwd/index.json `
     --api-key $token
 ```
 
@@ -58,7 +58,7 @@ token into a shell history you keep.
 ## Install
 
 ```bat
-dotnet nuget add source https://nuget.pkg.github.com/ylzwd123/index.json ^
+dotnet nuget add source https://nuget.pkg.github.com/ylzwd/index.json ^
     --name openaes67 --username <github-user> --password <PAT-with-read:packages>
 nuget install OpenAES67 -Source openaes67
 ```
@@ -73,7 +73,7 @@ want version pinning.
 `OpenAES67 0.1.0` is live:
 
 ```
-https://github.com/users/ylzwd123/packages/nuget/package/OpenAES67
+https://github.com/users/ylzwd/packages/nuget/package/OpenAES67
 ```
 
 It is linked to the repository automatically (the nuspec carries
@@ -84,7 +84,7 @@ not expose a REST endpoint for changing NuGet package visibility (`PATCH
 /user/packages/...` returns 404); it is a switch on the package settings page:
 
 ```
-https://github.com/users/ylzwd123/packages/nuget/OpenAES67/settings
+https://github.com/users/ylzwd/packages/nuget/OpenAES67/settings
 ```
 
 This costs a consumer nothing: GitHub Packages requires authentication for NuGet

@@ -349,7 +349,7 @@ try {
     $nupkg = Join-Path $root "packaging\nuget\out\OpenAES67.$Version.nupkg"
     if (-not (Test-Path $nupkg)) { Fail "package not found: $nupkg" }
     $token = (& gh auth token).Trim()
-    & dotnet nuget push $nupkg --source https://nuget.pkg.github.com/ylzwd123/index.json --api-key $token | ForEach-Object { Write-Host "  $_" }
+    & dotnet nuget push $nupkg --source https://nuget.pkg.github.com/ylzwd/index.json --api-key $token | ForEach-Object { Write-Host "  $_" }
     if ($LASTEXITCODE -ne 0) { Fail "nuget push failed (does the token have write:packages?)" }
 } finally { Pop-Location }
 

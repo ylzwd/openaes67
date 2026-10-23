@@ -14,7 +14,7 @@ and are not backported.
 
 Please **do not open a public issue**. Use GitHub's private reporting:
 
-1. Go to the [Security tab](https://github.com/ylzwd123/openaes67/security)
+1. Go to the [Security tab](https://github.com/ylzwd/openaes67/security)
 2. **Report a vulnerability**
 3. Describe the impact and, if you can, the smallest reproduction
 

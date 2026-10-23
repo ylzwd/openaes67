@@ -517,7 +517,7 @@ bench-baseline.txt   性能基线，供 tools/verify-perf.ps1 使用
 每个版本同时发布到 GitHub Packages 上，便于 CI 使用或锁定版本：
 
 ```bat
-dotnet nuget add source https://nuget.pkg.github.com/ylzwd123/index.json ^
+dotnet nuget add source https://nuget.pkg.github.com/ylzwd/index.json ^
     -n openaes67 -u <github 用户名> -p <带 read:packages 的 PAT>
 nuget install OpenAES67 -Source openaes67
 ```
