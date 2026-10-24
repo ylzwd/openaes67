@@ -20,7 +20,14 @@ param(
     # The CI run whose artifacts to package.
     [Parameter(Mandatory = $true)][long]$RunId,
     # Skip the upload and only produce the archives.
-    [switch]$NoUpload
+    [switch]$NoUpload,
+    # A token with contents:write. The device-flow token that gh auth login
+    # issues belongs to an OAuth App, and GitHub refuses write access to
+    # releases for those: the request comes back as "Resource not accessible
+    # by integration". A classic personal access token with the repo scope
+    # works. It is read from a file rather than the command line, so it does
+    # not end up in the shell history.
+    [string]$TokenFile = 'C:\Users\Public\oa67-token.txt'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,9 +39,9 @@ if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path $stage | Out-Null
 
 # ---------------------------------------------------------------- credentials
-$tokenFile = 'C:\Users\Public\oa67-token.txt'
-if (-not (Test-Path $tokenFile)) { throw "no token at $tokenFile" }
-$token = [System.IO.File]::ReadAllText($tokenFile).Trim()
+if (-not (Test-Path $TokenFile)) { throw "no token at $TokenFile" }
+$token = [System.IO.File]::ReadAllText($TokenFile).Trim()
+if (-not $token) { throw "the token file is empty" }
 $headers = @{
     "Authorization"  = "Bearer $token"
     "Accept"         = "application/vnd.github+json"
