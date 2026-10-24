@@ -38,20 +38,32 @@ permitted when:
    `Qt6Core.dll` / `Qt6Gui.dll` / `Qt6Widgets.dll` beside the executable.
 2. **Relinkability is preserved.** No obfuscation, no patched build, no
    signature that would block substitution.
-3. **The Qt licence notice travels with the archive.** `windeployqt` copies
-   Qt's `LICENSE` and `LICENSES/` files when present; if a build machine does
-   not have them, the packaging step in `tools/release.ps1` must add this file
-   and a pointer to <https://www.qt.io/licensing/> to the archive.
+3. **The Qt licence notice travels with the archive.** The GUI archive contains
+   a `LICENSES/` directory with the full text of LGPL-3.0-only, GPL-3.0-only
+   and GPL-2.0-only, and a `QT-SBOM/` directory holding the kit's SPDX bill of
+   materials, which records which licence applies to which Qt module.
 
 Because the archive contains Qt as separate DLLs rather than object code inside
 `openaes67_gui.exe`, LGPL section 4 (reverse engineering for debugging
 modifications) and section 6 (the "Installation Information" requirement) do not
 impose additional obligations on this project.
 
-**If a Qt build without `LICENSES/` is ever used to produce an archive**, add
-this notice and the Qt licence text to that archive before publishing. The
-shipped CI job installs Qt from the official `jurplel/install-qt-action`
-installer, which includes them.
+### Where the licence text comes from
+
+The binary Qt kit that `aqtinstall` fetches does **not** contain a `LICENSES/`
+directory -- only the Qt sources do. The CI job therefore takes the licence
+text from the Qt sources of the exact version it built against:
+
+    https://raw.githubusercontent.com/qt/qtbase/v6.8.3/LICENSES/LGPL-3.0-only.txt
+
+The version is pinned to the one in `ci.yml`, so the text always matches the
+binaries beside it. The SPDX bill of materials, which the kit does ship under
+`sbom/`, is copied in as well: it names the licence of every module, so a
+reader can check that the modules in this archive are the LGPL ones.
+
+If the Qt version in `ci.yml` changes, the version in the download URL must
+change with it. `verify-claims.ps1` asserts that both mention the same
+version, so a stale URL cannot ship a mismatched licence.
 
 ---
 

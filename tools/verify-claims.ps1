@@ -233,6 +233,17 @@ Check 'CI copies the Qt licence text' `
     (($ciWorkflow -match 'LICENSES') -and ($ciWorkflow -match 'QT_ROOT_DIR')) `
     'ci.yml must copy the Qt kit LICENSES directory into the GUI artifact'
 
+# The licence text is fetched from the Qt sources of a specific version. If the
+# version in the download URL drifts from the version that was built, the
+# archive would carry the text of a different Qt than the one it ships.
+$ciQtVersion = if ($ciWorkflow -match "version:\s*'([\d.]+)'") { $Matches[1] } else { $null }
+# The URL is built from a variable in the workflow, so the variable's value is
+# what has to agree with the version that is installed.
+$licenceVersion = if ($ciWorkflow -match '\$qtVersion\s*=\s*"([\d.]+)"') { $Matches[1] } else { $null }
+Check 'the Qt licence matches the Qt build' `
+    ($ciQtVersion -and $licenceVersion -and $ciQtVersion -eq $licenceVersion) `
+    "ci.yml builds $ciQtVersion but the licence text is fetched for $licenceVersion"
+
 # A run block that contains an unpaired expression opener makes GitHub fail to
 # parse the workflow: the run is reported as failed and it has no jobs at all,
 # which looks like an infrastructure problem rather than a syntax one. Count

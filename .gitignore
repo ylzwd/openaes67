@@ -13,6 +13,7 @@ __pycache__/
 tests/*.wav
 tests/*.log
 tests/*.err
+*.log
 # IDE
 .vs*/
 # release artifacts

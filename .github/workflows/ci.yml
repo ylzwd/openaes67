@@ -132,30 +132,30 @@ jobs:
           if (-not (Test-Path "$pkg/platforms/qwindows.dll")) {
             throw "windeployqt did not produce the platform plugin"
           }
-          # windeployqt copies the binaries but not the licence text, and Qt is
-          # LGPL: redistributing it means shipping its licence. The kit keeps it
-          # in LICENSES/ next to the binaries; without it the archive cannot
-          # satisfy docs/THIRD-PARTY-NOTICES.md, so copy it in or fail here.
-          # The action sets QT_ROOT_DIR in the environment; that is the value we
-          # want. It is read from the environment rather than interpolated so
-          # this block contains no GitHub expression syntax at all -- a stray
-          # opening brace pair inside a run block makes GitHub fail to parse the
-          # whole workflow, and the run then reports failure with no jobs.
+          # windeployqt copies the binaries but not their licence text, and Qt is
+          # LGPL: redistributing it means shipping its licence. The binary kit
+          # that aqtinstall fetches does not carry the LICENSES directory at
+          # all, so it is taken from the Qt sources of the same version. The
+          # kit does ship an SPDX bill of materials, which records which
+          # licence applies to which module; that goes in as well.
           $qtRoot = $env:QT_ROOT_DIR
           if (-not $qtRoot) { throw "QT_ROOT_DIR is not set by the Qt install step" }
-          $licences = Join-Path $qtRoot "LICENSES"
-          if (-not (Test-Path $licences)) {
-            # Some kit layouts put it one level down, under the arch directory.
-            $found = Get-ChildItem $qtRoot -Recurse -Directory -Filter 'LICENSES' -ErrorAction SilentlyContinue |
-                     Select-Object -First 1
-            if (-not $found) { throw "no LICENSES directory under $qtRoot" }
-            $licences = $found.FullName
+
+          $licences = Join-Path $pkg "LICENSES"
+          New-Item -ItemType Directory -Path $licences -Force | Out-Null
+          $qtVersion = "6.8.3"
+          $base = "https://raw.githubusercontent.com/qt/qtbase/v$qtVersion/LICENSES"
+          foreach ($f in @('LGPL-3.0-only.txt', 'GPL-3.0-only.txt', 'GPL-2.0-only.txt')) {
+            $out = Join-Path $licences $f
+            Invoke-WebRequest -Uri "$base/$f" -OutFile $out -UseBasicParsing
+            if ((Get-Item $out).Length -lt 1000) { throw "$f came back empty" }
           }
-          Copy-Item $licences (Join-Path $pkg "LICENSES") -Recurse
-          $qtLicense = Get-ChildItem (Join-Path $pkg "LICENSES") -Recurse -File |
-                       Where-Object { $_.Name -match 'LGPL|GPL|LICENSE' } | Select-Object -First 1
-          if (-not $qtLicense) { throw "the copied LICENSES directory holds no licence text" }
-          Write-Host "  Qt licence: $($qtLicense.FullName)"
+          # The SPDX manifest names the licence for every module in the kit.
+          $sbom = Join-Path $qtRoot "sbom"
+          if (Test-Path $sbom) {
+            Copy-Item $sbom (Join-Path $pkg "QT-SBOM") -Recurse
+          }
+          Write-Host "  Qt licences: $((Get-ChildItem $licences).Name -join ', ')"
 
       - name: Upload GUI package
         uses: actions/upload-artifact@v4
