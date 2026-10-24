@@ -104,6 +104,51 @@ static bool setSockOptInt(SOCKET s, int level, int name, int value, std::string 
     return true;
 }
 
+// Marks a UDP socket with a DSCP value (the low 6 bits of the IPv4 TOS byte).
+//
+// AES67 §12 and ST 2110-21 expect audio to be expedited-forwarding and PTP to sit
+// above it; without marking, a congested link drops audio and clock in the same
+// queue as a file copy. Windows maps TOS to the 802.1p priority itself, so one
+// setsockopt is the whole change.
+bool setSocketDscp(uintptr_t socketHandle, int dscp) {
+    if (!socketHandle) {
+        return false;
+    }
+    const int tos = (dscp & 0x3F) << 2;
+    return ::setsockopt(static_cast<SOCKET>(socketHandle), IPPROTO_IP, IP_TOS,
+                        reinterpret_cast<const char *>(&tos), sizeof(tos)) != SOCKET_ERROR;
+}
+
+int socketDscp(uintptr_t socketHandle) {
+    if (!socketHandle) {
+        return -1;
+    }
+    int tos = 0;
+    int len = static_cast<int>(sizeof(tos));
+    if (::getsockopt(static_cast<SOCKET>(socketHandle), IPPROTO_IP, IP_TOS,
+                     reinterpret_cast<char *>(&tos), &len) == SOCKET_ERROR) {
+        return -1;
+    }
+    return (tos >> 2) & 0x3F;
+}
+
+bool verifyDscpSupport(std::string *detail) {
+    Winsock ws;
+    SOCKET s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (s == INVALID_SOCKET) {
+        if (detail) { *detail = "socket() failed"; }
+        return false;
+    }
+    const bool setEf = setSocketDscp(static_cast<uintptr_t>(s), 46);
+    const int ef = socketDscp(static_cast<uintptr_t>(s));
+    const bool setCs6 = setSocketDscp(static_cast<uintptr_t>(s), 48);
+    const int cs6 = socketDscp(static_cast<uintptr_t>(s));
+    ::closesocket(s);
+    if (detail) {
+        *detail = "ef=" + std::to_string(ef) + " cs6=" + std::to_string(cs6);
+    }
+    return setEf && ef == 46 && setCs6 && cs6 == 48;
+}
 bool UdpSocket::openSender(const std::string &ifaceIp, int ttl, std::string *err) {
     close();
     SOCKET s = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -141,6 +186,9 @@ bool UdpSocket::openSender(const std::string &ifaceIp, int ttl, std::string *err
     }
     // Let a receiver on the same host see the packets during testing.
     setSockOptInt(s, IPPROTO_IP, IP_MULTICAST_LOOP, 1, nullptr);
+
+    // Expedited forwarding: this socket carries audio and nothing else.
+    setSocketDscp(static_cast<uintptr_t>(s), 46);
 
     handle_ = static_cast<uintptr_t>(s);
     return true;

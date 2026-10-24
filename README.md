@@ -102,7 +102,7 @@ for why, and what the equivalent workflow is.
 | `probe` format detection | ✅ | derives channels/codec/ptime from a live address, no SDP needed |
 | `bench` + baseline gate | ✅ | 8 cases; `--baseline` fails on a >15 % regression |
 | Config file | ✅ | `--config FILE`; unknown keys are startup errors |
-| Self-test | ✅ | **320 assertions**, no external framework |
+| Self-test | ✅ | **321 assertions**, no external framework |
 
 ### Measured (reproducible, see `docs/FINDINGS.md`)
 
@@ -146,7 +146,7 @@ Verify:
 
 ```powershell
 .\build\openaes67.exe help
-.\build\selftest.exe        # 320 assertions, must print ALL PASS
+.\build\selftest.exe        # 321 assertions, must print ALL PASS
 ```
 
 ### Build and register the 64×64 sound card
@@ -515,10 +515,11 @@ src/                 implementations, plus receive_loop.cpp shared by CLI and GU
 src/gui/             Qt 6 Widgets front end
 asio_driver/         64-in/64-out ASIO sound card (user-mode COM DLL)
 driver/              PortCls virtual audio driver (WDK; needs test signing)
-tests/selftest.cpp   320 assertions, no external framework
+tests/selftest.cpp   321 assertions, no external framework
 tools/               Python transmitter/receiver/grandmaster, soak and perf scripts
 assets/              icon set generated from logo.png
 docs/FINDINGS.md     every measurement, trap and dead end, in order
+docs/AES67-CONFORMANCE.md  clause-by-clause: what conforms, what does not, and why
 docs/DANTE-VISIBILITY.md  why a Dante Controller cannot list a receiver
 docs/M6-DESIGN.md    kernel <-> user shared-memory contract
 bench-baseline.txt   recorded benchmark values for tools/verify-perf.ps1

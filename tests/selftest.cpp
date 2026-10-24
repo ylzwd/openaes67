@@ -1070,6 +1070,16 @@ int main() {
         SapStreamInfo r;
         check("sap-info: recvonly is flagged", parseSdpStreamInfo(recvOnly, &r) && r.recvOnly);
     }
+    // ---------------- DSCP marking ----------------
+    // AES67 §12 expects audio at EF (46) and PTP at CS6 (48). A setsockopt that
+    // silently does nothing looks exactly like working QoS until a congested switch
+    // disagrees, so the platform is asked to hand the value back.
+    {
+        std::string detail;
+        const bool ok = verifyDscpSupport(&detail);
+        check("net: dscp marking survives a round trip", ok);
+        std::printf("    [INFO] dscp: %s\n", detail.c_str());
+    }
     // ---------------- malformed RTCP and PTP ----------------
     // Both are network input. The parsers already bounds-check (there are comments in
     // ptp.cpp about a past read past the end), so what these assertions add is

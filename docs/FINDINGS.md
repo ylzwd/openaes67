@@ -9315,3 +9315,85 @@ RTCP 和 PTP 的边界检查写得很仔细，甚至带着过去事故的注释 
 另一个具体收获：**校验放在越靠近输入的地方，收益越大。** `parseSdpAudioFormat` 加上界之后，
 SAP 发现路径自动获得同样的保护，一行没改。反过来，如果当初把上界检查写在 `main.cpp` 的
 参数校验里（那里确实也有），SAP 路径就永远不会受保护。
+---
+
+## 139. AES67 一致性分析：把"符合标准"拆成可核对的行
+
+### 为什么要做
+
+项目一直有 `docs/DANTE-*.md` 讲**怎么和 Dante 相处**，但没有一份讲**和 AES67 标准本身差多少**。
+结果是所有"我们支持 AES67"的说法都停留在句子上：读的人无法判断哪一条是逐字实现的，哪一条是
+"大致这样"，哪一条根本没做。
+
+于是逐个读源码，对着 AES67-2018 和 ST 2110-30 的条款，写成了
+`docs/AES67-CONFORMANCE.md`。它不是认证，也不假装是：**它是一张差距表，把不符合的地方标出来。**
+
+### 方法
+
+每条结论都必须能落回代码：
+
+| 结论 | 依据 |
+|---|---|
+| SDP 属性齐全且顺序正确 | `buildSdp()`（`src/sdp.cpp`） |
+| L16/L24 打包字节序 | `packPayload()`（`src/rtp.cpp`） |
+| 1 ms / 125 µs 包时长 | `framesPerPacket()`，`StreamConfig` 校验范围 |
+| PTP 从时钟流程 | `PtpSlave`（`src/ptp.cpp`）的 message type switch |
+| SAP 组、端口、TTL、删除包 | `kSapGroups`、`kSapPort`（`src/sap.cpp`） |
+| 没有 DSCP | `grep -R IP_TOS` 之前为空 |
+
+不能落回代码的（例如"时间戳精度约 0.2 ms"）标注为观察值，不写成断言。
+
+### 找到的三个真差距
+
+**1. 没有 QoS 标记（已修）。** AES67 §12 要求音频用 EF、PTP 用 CS6。代码里
+`IP_MULTICAST_TTL` 设了，`IP_TOS` 一次都没设 —— 也就是说拥塞时音频和 PTP 与文件拷贝同队。
+这是**代价最小、收益最大**的一条：每个 socket 一次 `setsockopt`。
+
+**2. 通道数上限与标准不一致（已加提示）。** AES67-2018 §8.1 把单流上限定为 8 通道；
+64 通道是 ST 2110-30 的做法。我们允许 64 且没有任何提示，于是"接收端只锁 8 个通道"
+这种问题会变成猜谜。现在启动时打印：
+
+```
+note: 64 channels exceeds the AES67 stream limit (8); this is an
+  ST 2110-30 style flow. Receivers that enforce AES67 will refuse it
+  or lock to the first 8. Use --channels 8 and several streams for
+  strict interoperability.
+```
+
+注意它**不拒绝**这个配置：在期待 64 通道的网络上它是合法的，而且 64×64 声卡正是这个选项
+存在的理由。提示和拒绝是两件事。
+
+**3. 广播 SSM 却用 ASM 加入（未修，已记录）。** SDP 里发
+`a=source-filter: incl IN IP4 <group> <source>`，但接收端用 `IP_ADD_MEMBERSHIP` 做任意源加入。
+在 IGMPv2 网络无害，在纯 SSM 网络上就不对。**我们没有修它，因为无法在这里验证** ——
+需要一台配置了 IGMPv3/SSM 的交换机。把它写进文档比写一个没验证过的 `IP_ADD_SOURCE_MEMBERSHIP` 诚实。
+
+### DSCP 的验证方式
+
+`setsockopt` 返回 0 不代表真的生效。所以加了 `verifyDscpSupport()`：开一个临时 socket，
+设 EF，用 `getsockopt` 读回来，再设 CS6，再读回来。自检断言：
+
+```
+[PASS] net: dscp marking survives a round trip
+[INFO] dscp: ef=46 cs6=48
+```
+
+被驱动或策略层忽略的选项会让这条断言失败。**它仍然不能证明包在线上真的带了这个 TOS** ——
+那需要抓包。文档里写明了这个边界，没有把"配置成功"说成"链路上生效"。
+
+### 分析本身的收获
+
+写这张表的过程中发现两件事，都不是读文档能得到的：
+
+- **L24 只有 16 位有效精度。** 内部管线是 `int16`，L24 打包时把 16 位放在高两字节、低字节填 0。
+  这在线上完全合法（接收端看不出区别），但"支持 24 位"这句话是假的。文档里写清楚了：
+  它买不到动态范围，只买到兼容性。
+- **`a=sync-time:0` / `a=framecount` / `a=clock-domain` 是 Ravenna 习惯，不是 AES67 要求。**
+  它们对 Dante 有帮助，但把"我们符合 AES67"说成"我们发了这些属性"是两件事。
+
+### 教训
+
+**"支持标准"这句话本身没有信息量，除非它旁边写着"哪一条没做到"。**
+这张表最有价值的部分不是那 11 个 Conformant，而是三个诚实标出的差距 —— 尤其是第三个：
+明知不对、但无法验证，于是只记录不修改。**分析的价值在于它敢写下"这里不行"，而不是在于它
+能证明"这里行"。**

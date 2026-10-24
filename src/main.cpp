@@ -487,6 +487,17 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             std::fprintf(stderr, "invalid stream parameters: %s\n", reason.c_str());
             return 1;
         }
+        // AES67-2018 §8.1 caps a stream at 8 channels; 64-channel flows are ST 2110-30
+        // territory. Saying so once at startup is cheaper than the confusion of a
+        // receiver that locks to the first eight channels and ignores the rest.
+        if (cfg.channels > 8) {
+            std::fprintf(stderr,
+                         "note: %d channels exceeds the AES67 stream limit (8); this is an\n"
+                         "  ST 2110-30 style flow. Receivers that enforce AES67 will refuse it\n"
+                         "  or lock to the first 8. Use --channels 8 and several streams for\n"
+                         "  strict interoperability.\n",
+                         cfg.channels);
+        }
         // Bytes per sample depends on the codec. This used to assume L16, so an L24
         // stream was warned about at two thirds of its real size: 64 ch at 1 ms is
         // 6144 bytes as L16 but 9216 as L24, and the message printed the smaller

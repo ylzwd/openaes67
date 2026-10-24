@@ -29,6 +29,18 @@ private:
 // so the trap is handled in exactly one place.
 bool setRecvTimeoutMs(uintptr_t socketHandle, int timeoutMs);
 
+// DSCP marking, in the units the standards use: 46 = EF (audio), 48 = CS6 (PTP).
+// AES67 §12 and ST 2110-21 expect both, and without marking a congested link
+// queues audio behind whatever else shares the port.
+bool setSocketDscp(uintptr_t socketHandle, int dscp);
+int  socketDscp(uintptr_t socketHandle);   // -1 when the OS will not report it
+
+// Opens a throwaway socket, marks it, reads the value back, and reports what the
+// platform actually did. Used by the self-test: a setsockopt that silently fails
+// is indistinguishable from "QoS is handled" until a congested switch says
+// otherwise.
+bool verifyDscpSupport(std::string *detail);
+
 // MAC address of the adapter that owns `ipv4` (dotted quad). Used for the SDP
 // a=ts-refclk:localmac line: a sender that is its own clock must still name a
 // real interface, and the code used to emit 00-00-00-00-00-00.

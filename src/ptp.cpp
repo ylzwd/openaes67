@@ -172,6 +172,12 @@ static bool openMulticast(uint16_t port, const std::string &ifaceIp, uintptr_t *
         closesocket(s);
         return false;
     }
+    // PTP is the clock every other stream depends on, so it sits above audio in the
+    // queue: CS6 (48). Without this, a congested link delays Sync messages and the
+    // slave trades lock for drift.
+    const int tos = 48 << 2;
+    ::setsockopt(s, IPPROTO_IP, IP_TOS, reinterpret_cast<const char *>(&tos), sizeof(tos));
+
     *handle = static_cast<uintptr_t>(s);
     return true;
 }
