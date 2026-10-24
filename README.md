@@ -4,6 +4,11 @@
 
 # OpenAES67
 
+[![ci](https://github.com/ylzwd/openaes67/actions/workflows/ci.yml/badge.svg)](https://github.com/ylzwd/openaes67/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/ylzwd/openaes67?display_name=tag)](https://github.com/ylzwd/openaes67/releases)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![AES67](https://img.shields.io/badge/AES67-conformance%20analysis-4c6ef5)](docs/AES67-CONFORMANCE.md)
+
 An open-source AES67 network audio implementation for Windows, including a
 **64-in / 64-out virtual sound card** that any ASIO application can open.
 
