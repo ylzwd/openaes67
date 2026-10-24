@@ -267,15 +267,26 @@ try {
         if ($withGui) {
             $guiSrc = Join-Path $stage 'gui'
             Get-ChildItem $guiSrc | ForEach-Object { Copy-Item $_.FullName $pkg -Recurse -Force }
-            # A Qt kit built without its LICENSES/ directory would leave the
-            # archive with no Qt licence text. Fail here rather than publish an
-            # archive that cannot satisfy the notice we just added.
-            $qtLicence = Get-ChildItem $pkg -Recurse -Include 'LICENSE*','LICENSES' -ErrorAction SilentlyContinue |
-                         Where-Object { $_.FullName -match 'Qt|qt' }
+            # The GUI archive redistributes the Qt runtime, and Qt is LGPL:
+            # the licence text has to travel with it. windeployqt copies the
+            # binaries but not the text, so the CI job puts the kit's LICENSES
+            # directory into the artifact. If it is still missing here, the
+            # archive cannot satisfy the notice we ship alongside it -- fail
+            # rather than publish one that cannot.
+            $qtLicence = Get-ChildItem $pkg -Recurse -ErrorAction SilentlyContinue |
+                         Where-Object { $_.Name -eq 'LICENSES' -and $_.PSIsContainer }
             if (-not $qtLicence) {
-                throw ("no Qt licence text found in the GUI archive -- add docs\THIRD-PARTY-NOTICES.md and " +
-                       "the Qt licence text before publishing this archive")
+                throw ("no LICENSES directory in the GUI archive -- the Qt runtime is LGPL and its " +
+                       "licence text must ship with it. Check that the CI job copied the Qt kit's " +
+                       "LICENSES directory into the artifact.")
             }
+            $text = Get-ChildItem $qtLicence[0].FullName -Recurse -File |
+                    Where-Object { $_.Name -match 'LGPL|GPL|LICENSE|COPYING' }
+            if (-not $text) {
+                throw ("the LICENSES directory in the GUI archive holds no licence text -- " +
+                       "refusing to publish an archive that cannot state its own terms")
+            }
+            Write-Host "  Qt licence: $($text[0].Name)"
         }
         $zip = Join-Path $stage "$name.zip"
         Compress-Archive -Path $pkg -DestinationPath $zip -CompressionLevel Optimal

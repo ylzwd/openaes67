@@ -222,8 +222,16 @@ Check 'archives include the notices' `
 # notice. release.ps1 throws in that case; assert the guard is still present so a
 # later edit cannot quietly remove the only check between build and publish.
 Check 'GUI archive requires Qt licence text' `
-    ($releaseScript -match 'no Qt licence text found') `
-    'release.ps1 must fail when the Qt licence text is absent'
+    ($releaseScript -match 'no LICENSES directory in the GUI archive') `
+    'release.ps1 must fail when the Qt LICENSES directory is absent'
+
+# The guard is only useful if the CI job actually puts the licence text into the
+# artifact. Without this, the package would be missing it and the release would
+# fail at the last step instead of at the build.
+$ciWorkflow = Get-Content (Join-Path $root '.github\workflows\ci.yml') -Raw
+Check 'CI copies the Qt licence text' `
+    (($ciWorkflow -match 'LICENSES') -and ($ciWorkflow -match 'qt-root-dir')) `
+    'ci.yml must copy the Qt kit LICENSES directory into the GUI artifact'
 
 Write-Host ""
 # Also emit a machine-readable summary line: Write-Host output cannot be captured
