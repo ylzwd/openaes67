@@ -525,6 +525,7 @@ tools/               Python transmitter/receiver/grandmaster, soak and perf scri
 assets/              icon set generated from logo.png
 docs/FINDINGS.md     every measurement, trap and dead end, in order
 docs/AES67-CONFORMANCE.md  clause-by-clause: what conforms, what does not, and why
+docs/CODE-SIGNING.md  why the binaries are unsigned, and what signing would take
 docs/DANTE-VISIBILITY.md  why a Dante Controller cannot list a receiver
 docs/M6-DESIGN.md    kernel <-> user shared-memory contract
 bench-baseline.txt   recorded benchmark values for tools/verify-perf.ps1

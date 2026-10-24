@@ -17,7 +17,10 @@ param(
     [string] $NotesFile,
     [switch] $DryRun,
     [switch] $SkipPublish,
-    [switch] $SkipPerf
+    [switch] $SkipPerf,
+    # Authenticode-sign the packaged binaries if a certificate is available.
+    # Signing happens after packaging and before zipping: a zip cannot carry a signature.
+    [switch] $Sign
 )
 
 $ErrorActionPreference = 'Stop'
@@ -232,6 +235,19 @@ if ($SkipPublish) {
 }
 
 # ---------------------------------------------------------------- package
+# Certificate selection for -Sign: a thumbprint, or a PFX plus the name of the
+# environment variable holding its password (never a literal password).
+$signArgs = @()
+if ($Sign) {
+    if ($env:OPENAES67_SIGN_THUMBPRINT) {
+        $signArgs = @('-Thumbprint', $env:OPENAES67_SIGN_THUMBPRINT)
+    } elseif ($env:OPENAES67_PFX_PATH) {
+        $signArgs = @('-PfxPath', $env:OPENAES67_PFX_PATH)
+    } else {
+        Fail '-Sign needs OPENAES67_SIGN_THUMBPRINT or OPENAES67_PFX_PATH'
+    }
+}
+
 Write-Step "packaging the CI artifacts"
 $stage = Join-Path $env:TEMP "openaes67-release-$Version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -288,6 +304,16 @@ try {
             }
             Write-Host "  Qt licence: $($text[0].Name)"
         }
+        if ($Sign) {
+            # Sign what will be shipped, then verify it. A signing step that silently
+            # does nothing is worse than no signing: the notes would claim a signature
+            # and every user would still see the SmartScreen prompt.
+            & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tools\sign-binaries.ps1') `
+                -Path ((Join-Path $pkg 'openaes67.exe') + ',' + (Join-Path $pkg 'openaes67_selftest.exe') + ',' +
+                       (Join-Path $pkg 'asio\openaes67_asio64.dll')) @signArgs
+            if ($LASTEXITCODE -ne 0) { Fail "signing or signature verification failed for $name" }
+        }
+
         $zip = Join-Path $stage "$name.zip"
         Compress-Archive -Path $pkg -DestinationPath $zip -CompressionLevel Optimal
         $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()

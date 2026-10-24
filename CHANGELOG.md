@@ -12,6 +12,13 @@ Full engineering notes — measurements, dead ends, and why each decision was ma
 
 ### Added
 
+- `tools/sign-binaries.ps1`: Authenticode signing and verification, with the PFX
+  password taken from the environment and an explicit failure when a signature is
+  present but untrusted.
+- `docs/CODE-SIGNING.md`: why the released binaries are unsigned, what SmartScreen
+  actually checks, and what each signing option costs.
+- `-Sign` on `tools/release.ps1`: signs the packaged binaries after packaging and
+  before zipping, and aborts the release if verification fails.
 - `docs/AES67-CONFORMANCE.md`: clause-by-clause analysis against AES67-2018 and
   ST 2110-30, naming what is not implemented and why.
 - DSCP marking: audio at EF (46), PTP at CS6 (48). Verified by a `getsockopt`
