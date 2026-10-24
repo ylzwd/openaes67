@@ -1,0 +1,38 @@
+﻿# Daily check -- 2026-10-24
+
+Produced by `tools/daily-check.ps1`. A commit is made only when the
+fingerprint below changes, so a quiet day leaves no trace in the history.
+
+| Check | Result | Detail |
+|---|---|---|
+| self-test | pass | 320 assertions, no external framework |
+| verify-claims | pass | 22 gates |
+| scan-secrets | pass | no credentials, no personal data |
+| bench | pass | 8 cases measured |
+| bench within tolerance | pass | 0 case(s) slower |
+| doctor | pass | no blocking problems |
+
+## Benchmark
+
+Raw timings vary with whatever else the machine is doing, so each case is
+bucketed against a baseline recorded on this computer: `same`, `slower`
+or `faster`. The bucket, not the number, is what the fingerprint records.
+
+| Case | Measured | Baseline | Bucket |
+|---|---|---|---|
+| ring 2ch | 10,513.6 Mframes/s | 11,598.4 Mframes/s | same |
+| ring 64ch | 338.6 Mframes/s | 341.3 Mframes/s | same |
+| queue 2ch | 2,266.4 Mframes/s | 2,273.6 Mframes/s | same |
+| queue 64ch | 659.0 Mframes/s | 664.8 Mframes/s | same |
+| convert 64->2 | 509.3 Mframes/s | 533.8 Mframes/s | same |
+| convert 64->64 | 462.5 Mframes/s | 460.1 Mframes/s | same |
+| rtp pack+parse | 34.6 Mops/s | 34.6 Mops/s | same |
+| sdp build | 3.9 us | 3.9 us | same |
+
+Machine: WD-BJB
+
+Interface: 192.169.0.118
+
+Tolerance: a case is `slower` past 20% against the reference.
+
+Fingerprint: `self-test=True|verify-claims=True|scan-secrets=True|bench=True|bench within tolerance=True|doctor=True|ring 2ch=same|ring 64ch=same|queue 2ch=same|queue 64ch=same|convert 64->2=same|convert 64->64=same|rtp pack+parse=same|sdp build=same`
