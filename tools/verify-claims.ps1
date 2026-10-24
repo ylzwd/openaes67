@@ -230,8 +230,17 @@ Check 'GUI archive requires Qt licence text' `
 # fail at the last step instead of at the build.
 $ciWorkflow = Get-Content (Join-Path $root '.github\workflows\ci.yml') -Raw
 Check 'CI copies the Qt licence text' `
-    (($ciWorkflow -match 'LICENSES') -and ($ciWorkflow -match 'qt-root-dir')) `
+    (($ciWorkflow -match 'LICENSES') -and ($ciWorkflow -match 'QT_ROOT_DIR')) `
     'ci.yml must copy the Qt kit LICENSES directory into the GUI artifact'
+
+# A run block that contains an unpaired expression opener makes GitHub fail to
+# parse the workflow: the run is reported as failed and it has no jobs at all,
+# which looks like an infrastructure problem rather than a syntax one. Count
+# the braces here so the mistake is caught before it reaches GitHub.
+$openers = ([regex]::Matches($ciWorkflow, '\$\{\{')).Count
+$closers = ([regex]::Matches($ciWorkflow, '\}\}')).Count
+Check 'CI expressions are balanced' ($openers -eq $closers) `
+    "$openers openers, $closers closers"
 
 Write-Host ""
 # Also emit a machine-readable summary line: Write-Host output cannot be captured

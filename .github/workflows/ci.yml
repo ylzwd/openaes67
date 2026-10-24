@@ -109,7 +109,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Qt 6
-        id: qt
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.8.3'
@@ -137,9 +136,13 @@ jobs:
           # LGPL: redistributing it means shipping its licence. The kit keeps it
           # in LICENSES/ next to the binaries; without it the archive cannot
           # satisfy docs/THIRD-PARTY-NOTICES.md, so copy it in or fail here.
+          # The action sets QT_ROOT_DIR in the environment; that is the value we
+          # want. It is read from the environment rather than interpolated so
+          # this block contains no GitHub expression syntax at all -- a stray
+          # opening brace pair inside a run block makes GitHub fail to parse the
+          # whole workflow, and the run then reports failure with no jobs.
           $qtRoot = $env:QT_ROOT_DIR
-          if (-not $qtRoot) { $qtRoot = '${{ steps.qt.outputs.qt-root-dir }}' }
-          if (-not $qtRoot -or $qtRoot -like '${{*') { throw "the Qt root directory is unknown" }
+          if (-not $qtRoot) { throw "QT_ROOT_DIR is not set by the Qt install step" }
           $licences = Join-Path $qtRoot "LICENSES"
           if (-not (Test-Path $licences)) {
             # Some kit layouts put it one level down, under the arch directory.
