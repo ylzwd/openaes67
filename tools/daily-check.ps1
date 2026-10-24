@@ -264,9 +264,16 @@ if ($prevFingerprint) {
 }
 Write-Host "  changed     : $statusChanged"
 
-if (-not $statusChanged) {
-    # Keep the file on disk for the next comparison, but do not commit it.
-    Set-Content -Path $reportFile -Value $content -Encoding UTF8 -NoNewline
+# Two cases, and they differ in what deserves a commit:
+#
+#   - the same day, running again: nothing changed, so nothing to write and
+#     nothing to commit. Rewriting the file would leave the working tree dirty
+#     for ever without ever producing a commit.
+#   - a new day: the file is new. It records that the check ran on that day,
+#     which is worth having even when every gate still passes.
+$isNewDay = -not (Test-Path $reportFile)
+
+if (-not $statusChanged -and -not $isNewDay) {
     Write-Host ""
     Write-Host "  nothing changed -- no commit" -ForegroundColor Green
     exit 0
@@ -299,7 +306,8 @@ try {
     }
 
     $summary = ($results | ForEach-Object { "$($_.Name)=$($_.Detail)" }) -join '; '
-    & git commit -m "chore(daily): record the $today check -- $summary" 2>&1 | Out-Null
+    $kind = if ($statusChanged) { 'record the' } else { 'record the first run of' }
+    & git commit -m "chore(daily): $kind $today check -- $summary" 2>&1 | Out-Null
     Write-Host ""
     Write-Host "  committed: $summary" -ForegroundColor Green
 
