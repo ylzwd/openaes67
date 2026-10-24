@@ -244,6 +244,20 @@ Check 'the Qt licence matches the Qt build' `
     ($ciQtVersion -and $licenceVersion -and $ciQtVersion -eq $licenceVersion) `
     "ci.yml builds $ciQtVersion but the licence text is fetched for $licenceVersion"
 
+# The publish script assembles the archives the same way release.ps1 does. The
+# two have to agree about the notices and about refusing an archive without the
+# Qt licence text, or a release could ship what the build deliberately refuses.
+$publishScript = Join-Path $root 'tools\publish-release.ps1'
+if (Test-Path $publishScript) {
+    $publish = Get-Content $publishScript -Raw
+    Check 'the publish script ships the notices' `
+        ($publish -match 'THIRD-PARTY-NOTICES\.md') `
+        'publish-release.ps1 must copy the notices into every archive'
+    Check 'the publish script refuses an archive without the Qt licence' `
+        ($publish -match 'no LICENSES directory in the GUI archive') `
+        'publish-release.ps1 must refuse to build a GUI archive without the licence text'
+}
+
 # A run block that contains an unpaired expression opener makes GitHub fail to
 # parse the workflow: the run is reported as failed and it has no jobs at all,
 # which looks like an infrastructure problem rather than a syntax one. Count
