@@ -6,12 +6,13 @@
 // Compiled by build.bat via rc.exe and by CMake automatically for MSVC.
 
 #include <windows.h>
+#include "openaes67/version.h"
 
 IDI_OPENAES67 ICON "openaes67.ico"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION    0,5,0,0
- PRODUCTVERSION 0,5,0,0
+ FILEVERSION    OPENAES67_VERSION_NUMERIC
+ PRODUCTVERSION OPENAES67_VERSION_NUMERIC
  FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
  FILEFLAGS      0
  FILEOS         VOS_NT_WINDOWS32
@@ -24,12 +25,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "OpenAES67 contributors"
             VALUE "FileDescription",  "OpenAES67 - AES67 network audio"
-            VALUE "FileVersion",      "0.5.0.0"
+            VALUE "FileVersion",      OPENAES67_VERSION
             VALUE "InternalName",     "openaes67"
-            VALUE "LegalCopyright",   "MIT License"
+            VALUE "LegalCopyright",   "Copyright (c) 2026 OpenAES67 contributors. MIT License."
             VALUE "OriginalFilename", "openaes67.exe"
             VALUE "ProductName",      "OpenAES67"
-            VALUE "ProductVersion",   "0.5.0.0"
+            VALUE "ProductVersion",   OPENAES67_VERSION
         END
     END
     BLOCK "VarFileInfo"

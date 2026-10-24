@@ -590,6 +590,17 @@ It takes the best of three runs and fails if any case is more than 10 % slower t
 `bench-baseline.txt`. `set OPENAES67_PERF_GATE=1` makes the build run it
 automatically (off by default: a timing gate on a busy machine fails for everyone).
 
+## Code signing policy
+
+**Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).**
+
+Binaries are signed only after CI passes on the tagged commit, and each signing
+request is approved manually. The full policy — which files are signed, who
+approves, what the program does with the user's system and data, and how to
+uninstall — is in [`docs/CODE-SIGNING-POLICY.md`](docs/CODE-SIGNING-POLICY.md).
+
+If a release is unsigned, its notes say so; the reason and the cost of each
+signing option are in [`docs/CODE-SIGNING.md`](docs/CODE-SIGNING.md).
 ## Package feed
 
 Every release is also published as a NuGet package on GitHub Packages, which is

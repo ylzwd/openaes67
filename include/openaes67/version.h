@@ -14,6 +14,13 @@
 // string, so the two cannot drift apart again.
 #pragma once
 
+// The Windows version resource cannot use a dotted string: FILEVERSION and
+// PRODUCTVERSION take four comma-separated integers. Keeping a second literal here
+// is the price of that format; verify-claims.ps1 compares it against the string and
+// against the built executable, so a bump that forgets one of the two fails the
+// build instead of shipping an executable whose properties claim an older version.
+#define OPENAES67_VERSION_NUMERIC 0,1,1,0
+
 #ifndef OPENAES67_VERSION
 #define OPENAES67_VERSION "0.1.1"
 #endif

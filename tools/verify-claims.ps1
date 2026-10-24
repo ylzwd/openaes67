@@ -123,6 +123,27 @@ Write-Host "OpenAES67 claim verification"
     $l16 = (& cmd /c "`"$cliExe`" info --channels 64 --ptime 1 --codec L16 2>&1") -join "`n"
     Check 'packet size warning follows the codec' ($l24 -match '9216 bytes/packet' -and $l16 -match '6144 bytes/packet') `
         ("L24: " + (($l24 -split "`n" | Where-Object { $_ -match 'bytes/packet' }) -join ' '))
+
+    # --- the Windows version resource must agree with the version string ----------
+    # SignPath Foundation requires every product-version attribute of a signed build
+    # to carry the same value, and it is a fair requirement: the shipped exe used to
+    # claim 0.5.0.0 while the binary printed 0.1.1, because app.rc had the numbers
+    # hard-coded. Both now come from include/openaes67/version.h, and this check is
+    # what stops the next bump from updating one of them only.
+    $versionText = (& cmd /c "`"$cliExe`" --version 2>&1") -join ''
+    $versionMatch = [regex]::Match($versionText, '(\d+\.\d+\.\d+)')
+    $exeVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value } else { '' }
+    $info = (Get-Item $cliExe).VersionInfo
+    Check 'Windows version resource matches the binary' ($exeVersion -ne '' -and $info.ProductVersion -eq $exeVersion -and $info.FileVersion -eq $exeVersion) `
+        ("resource ProductVersion=$($info.ProductVersion) FileVersion=$($info.FileVersion) binary=$exeVersion")
+
+    $numeric = (Select-String -Path (Join-Path $root 'include\openaes67\version.h') -Pattern 'OPENAES67_VERSION_NUMERIC\s+(\d+),(\d+),(\d+)').Matches
+    $numericOk = $false
+    if ($numeric -and $numeric.Count -gt 0) {
+        $g = $numeric[0].Groups
+        $numericOk = ($exeVersion -eq ($g[1].Value + '.' + $g[2].Value + '.' + $g[3].Value))
+    }
+    Check 'version.h numeric form matches its string' $numericOk ("numeric=" + $(if ($numeric -and $numeric.Count -gt 0) { $numeric[0].Groups[1].Value + ',' + $numeric[0].Groups[2].Value + ',' + $numeric[0].Groups[3].Value } else { 'missing' }) + " string=$exeVersion")
 Write-Host ""
 
 # ---- build flags -----------------------------------------------------------

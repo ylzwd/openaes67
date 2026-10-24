@@ -59,6 +59,10 @@ target_compile_definitions(openaes67_core PUBLIC
 target_link_libraries(openaes67_core PUBLIC ws2_32 advapi32 ole32 uuid iphlpapi winmm shell32)
 
 # ---- protocol self-test (no audio hardware, no network) --------------------
+# The resource script includes include/openaes67/version.h for the version numbers,
+# so rc.exe needs the same include path the C++ compiler gets.
+set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I${CMAKE_CURRENT_SOURCE_DIR}/include")
+
 add_executable(openaes67_selftest tests/selftest.cpp assets/app.rc)
 target_link_libraries(openaes67_selftest PRIVATE openaes67_core)
 

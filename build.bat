@@ -47,7 +47,7 @@ if "!CORE!"=="" (
 rem Resources: icon + version info. rc.exe comes from the Windows SDK that
 rem VsDevCmd.bat puts on PATH.
 echo === compiling resources ===
-rc /nologo /fo build\app.res assets\app.rc
+rc /nologo /I include /fo build\app.res assets\app.rc
 if errorlevel 1 goto :fail
 
 echo === building selftest ===
