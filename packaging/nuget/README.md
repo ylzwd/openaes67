@@ -46,7 +46,7 @@ gh auth refresh -h github.com -s write:packages
 
 ```powershell
 $token = gh auth token
-dotnet nuget push packaging\nuget\out\OpenAES67.0.1.0.nupkg `
+dotnet nuget push packaging\nuget\out\OpenAES67.<version>.nupkg `
     --source https://nuget.pkg.github.com/ylzwd/index.json `
     --api-key $token
 ```
@@ -70,7 +70,7 @@ want version pinning.
 
 ## Published
 
-`OpenAES67 0.1.0` is live:
+The package is published as `OpenAES67 <version>` (the last one built from this tree was 0.1.0):
 
 ```
 https://github.com/users/ylzwd/packages/nuget/package/OpenAES67
@@ -94,8 +94,8 @@ Public visibility only affects whether the package page is browsable.
 Verified with a clean restore:
 
 ```
-dotnet restore  ->  ~/.nuget/packages/openaes67/0.1.0/tools/openaes67.exe --version
-                    OpenAES67 0.1.0
+dotnet restore  ->  ~/.nuget/packages/openaes67/<version>/tools/openaes67.exe --version
+                    OpenAES67 <version>
 ```
 
 ## Caveat

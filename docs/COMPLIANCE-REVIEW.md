@@ -32,16 +32,18 @@ remote: Your account is suspended. Please visit https://support.github.com for m
 fatal: unable to access 'https://github.com/ylzwd123/openaes67.git/': 403
 ```
 
-**这不是历史记录，是当前状态。** `docs/FINDINGS.md:8828` 记录了停用经过（发v0.1.1 时撞上），此后未恢复。
+**这一段现在已经不是当前状态，而是当时的记录。** `docs/FINDINGS.md:8828` 写下了停用经过（发 v0.1.1 时撞上）。
+
+2026-10-24 账号恢复，随后完成：`v0.1.1` 发布（补 v0.1.0 的 Release）、仓库改名到 `ylzwd/openaes67`、推送恢复。下表保留当时的判断，是因为它记录了"被封时哪些事情是被卡住的"，而不是因为它现在仍然成立。
 
 ### 由此产生的实际问题
 
 | 问题 | 现状 |
 |---|---|
-| 远端不可写| 任何提交、tag、Release、NuGet 推送全部失败 |
-| 仓库实际可见性未知 | 被停用的仓库通常会转为私有；**若仓库已转私有而你以为是公开，开源就无从谈起** |
-| v0.1.1 未发布 | 代码自称 `0.1.1`，公开可见的最新 Release 是 `0.1.0` |
-| CI 无法运行 | 恢复后需补跑 `tools/release.ps1 -Version 0.1.1`（脚本设计成可续跑，无需重做） |
+| 远端不可写（当时） | 任何提交、tag、Release、NuGet 推送全部失败 |
+| 仓库实际可见性未知（当时） | 被停用的仓库通常会转为私有；恢复后确认仍是 public |
+| v0.1.1 未发布（当时） | 现已发布：<https://github.com/ylzwd/openaes67/releases/tag/v0.1.1> |
+| CI 无法运行（当时） | 恢复后已跑到全绿；`main` 上每次推送都重新验证 |
 
 ### 建议动作
 
@@ -218,7 +220,7 @@ Export-PfxCertificate -Cert $c -FilePath '%PFX%' `
 | 4 | README 加商标声明段（中英双语） | 🟡 本周 | 10 行内，ASIO/Dante/Audinate 均为描述性使用 |
 | 5 | 驱动测试签名密码改环境变量 | 🟢 有空再做 | 避免静态扫描误报 |
 | 6 | （可选）源文件加 SPDX 头 | 🟢 有空再做 | MIT 合规最佳实践 |
-| 7 | 恢复后补跑 `release.ps1 -Version 0.1.1` | ⏸ 待解封 | 脚本已设计为可续跑 |
+| 7 | 恢复后补跑 `release.ps1 -Version 0.1.1` | ✅ 已完成 | v0.1.1 与 v0.1.0 均已发布 |
 
 ---
 

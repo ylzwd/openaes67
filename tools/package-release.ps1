@@ -12,7 +12,7 @@
 
 .PARAMETER Version
     Version string used in the archive name. Defaults to the value in
-    CMakeLists.txt, or 0.1.0 when it cannot be read.
+    include/openaes67/version.h; there is no hard-coded fallback.
 
 .PARAMETER WithGui
     Also package openaes67_gui.exe together with its Qt runtime.
@@ -32,13 +32,11 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 try {
     if (-not $Version) {
-        $cmakeLists = Join-Path $root 'CMakeLists.txt'
-        if (Test-Path $cmakeLists) {
-            $m = Select-String -Path $cmakeLists -Pattern 'VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)' |
-                 Select-Object -First 1
-            if ($m) { $Version = $m.Matches[0].Groups[1].Value }
-        }
-        if (-not $Version) { $Version = '0.1.0' }
+        # Ask the one file that decides: version.h. It used to fall back to a literal
+        # here, which is how a package could be built with a version the binary did
+        # not report.
+        . (Join-Path $PSScriptRoot 'get-version.ps1')
+        $Version = Get-ProjectVersion
     }
     Write-Host "packaging OpenAES67 $Version"
 

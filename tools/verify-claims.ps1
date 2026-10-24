@@ -144,6 +144,42 @@ Write-Host "OpenAES67 claim verification"
         $numericOk = ($exeVersion -eq ($g[1].Value + '.' + $g[2].Value + '.' + $g[3].Value))
     }
     Check 'version.h numeric form matches its string' $numericOk ("numeric=" + $(if ($numeric -and $numeric.Count -gt 0) { $numeric[0].Groups[1].Value + ',' + $numeric[0].Groups[2].Value + ',' + $numeric[0].Groups[3].Value } else { 'missing' }) + " string=$exeVersion")
+
+    # --- every declared version agrees with version.h ----------------------------
+    # version.h is the only place the version is written. Everything that needs it
+    # either reads it (tools/get-version.ps1) or is checked here. Before this, five
+    # files carried their own literal and the shipped exe said 0.5.0.0.
+    $declared = (Select-String -Path (Join-Path $root 'include\openaes67\version.h') -Pattern '#define OPENAES67_VERSION "([0-9]+\.[0-9]+\.[0-9]+)"').Matches
+    $declaredVersion = if ($declared -and $declared.Count -gt 0) { $declared[0].Groups[1].Value } else { '' }
+
+    $csprojVersion = ''
+    $csprojPath = Join-Path $root 'packaging\nuget\OpenAES67.csproj'
+    if (Test-Path $csprojPath) {
+        $m = Select-String -Path $csprojPath -Pattern '<Version>([0-9]+\.[0-9]+\.[0-9]+)</Version>'
+        if ($m) { $csprojVersion = $m.Matches[0].Groups[1].Value }
+    }
+    Check 'NuGet package version matches version.h' ($declaredVersion -ne '' -and $csprojVersion -eq $declaredVersion) `
+        "csproj=$csprojVersion header=$declaredVersion"
+
+    # A stale literal is worse than a missing one: it is a second, wrong answer.
+    # Scanning for any version-shaped string would flag the comments that explain the
+    # history, so check the thing that actually matters instead: each consumer must
+    # derive the version, and none of them may carry its own copy.
+    $derives = @(
+        @{ File = 'assets/app.rc';            Need = 'OPENAES67_VERSION';      Forbid = 'FILEVERSION\s+\d+,\d+,\d+' },
+        @{ File = 'tools/package-release.ps1'; Need = 'Get-ProjectVersion';    Forbid = "Version\s*=\s*'\d+\.\d+\.\d+'" },
+        @{ File = 'tools/init-repo.ps1';      Need = 'Get-ProjectVersion';     Forbid = "OpenAES67 \d+\.\d+\.\d+:" },
+        @{ File = 'driver/build-driver.bat';  Need = 'get-version.ps1';        Forbid = '-v \d+\.\d+\.\d+\.\d+' }
+    )
+    $bad = @()
+    foreach ($entry in $derives) {
+        $path = Join-Path $root $entry.File
+        if (-not (Test-Path $path)) { continue }
+        $text = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+        if ($text -notmatch [regex]::Escape($entry.Need)) { $bad += ($entry.File + ': does not use ' + $entry.Need) }
+        if ($text -match $entry.Forbid) { $bad += ($entry.File + ': still carries a literal version') }
+    }
+    Check 'every version consumer derives it from version.h' ($bad.Count -eq 0) ($bad -join '; ')
 Write-Host ""
 
 # ---- build flags -----------------------------------------------------------

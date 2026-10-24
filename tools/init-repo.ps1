@@ -14,8 +14,15 @@
 [CmdletBinding()]
 param(
     [string]$Branch = 'main',
-    [string]$Message = 'OpenAES67 0.1.0: AES67 send/receive, PTP sync, rate control, GUI'
+    # Left empty on purpose: the default is built from version.h below. A literal
+    # here was one of the five places the version used to live.
+    [string]$Message
 )
+
+. (Join-Path $PSScriptRoot 'get-version.ps1')
+if (-not $Message) {
+    $Message = 'OpenAES67 ' + (Get-ProjectVersion) + ': AES67 send/receive, PTP sync, rate control, GUI'
+}
 
 # 'Continue', not 'Stop': git writes routine warnings to stderr and PowerShell
 # 5.1 turns those into terminating errors under 'Stop'. Every failure path below

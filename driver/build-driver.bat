@@ -1,4 +1,11 @@
 @echo off
+rem The INF version must be the project version with a fourth field. Ask version.h
+rem rather than carrying another literal: this file used to say 0.1.0.0 while the
+rem executables reported 0.1.1, and an INF that disagrees with its binaries is the
+rem kind of thing a signing review finds before a user does.
+set "OPENAES67_INF_VERSION="
+for /f "delims=" %%v in ('powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\tools\get-version.ps1" -Numeric') do set "OPENAES67_INF_VERSION=%%v"
+if not defined OPENAES67_INF_VERSION set "OPENAES67_INF_VERSION=0.0.0.0"
 rem Builds, stamps, validates and signs the M6 toolchain probe driver.
 rem
 rem This proves the four things a kernel driver needs on this machine:
@@ -82,7 +89,7 @@ rem local (UTC+8) the current local date is still "tomorrow" in UTC, so the
 rem package counts as postdated and fails signability. Stamp yesterday.
 for /f %%d in ('powershell -NoProfile -Command "(Get-Date).AddDays(-1).ToString('MM/dd/yyyy')"') do set STAMPDATE=%%d
 copy /y "%ROOT%openaes67_probe.inf" . >nul
-"%BIN_X64%\stampinf.exe" -f openaes67_probe.inf -d %STAMPDATE% -v 0.1.0.0 -a x64
+"%BIN_X64%\stampinf.exe" -f openaes67_probe.inf -d %STAMPDATE% -v %OPENAES67_INF_VERSION% -a x64
 if errorlevel 1 goto :fail
 
 echo === validating package (Inf2Cat) ===
@@ -126,7 +133,7 @@ copy /y openaes67_audio.sys "%OUT%\audio\" >nul
 copy /y "%ROOT%openaes67_audio.inf" "%OUT%\audio\" >nul
 rem stampinf writes the LOCAL date while Inf2Cat compares UTC, so stamp yesterday.
 for /f %%d in ('powershell -NoProfile -Command "(Get-Date).AddDays(-1).ToString('MM/dd/yyyy')"') do set STAMPDATE=%%d
-"%BIN_X64%\stampinf.exe" -f "%OUT%\audio\openaes67_audio.inf" -d %STAMPDATE% -v 0.1.0.0 -a x64
+"%BIN_X64%\stampinf.exe" -f "%OUT%\audio\openaes67_audio.inf" -d %STAMPDATE% -v %OPENAES67_INF_VERSION% -a x64
 if errorlevel 1 goto :fail
 echo === validating the audio package ===
 "%BIN_X86%\Inf2Cat.exe" /driver:"%OUT%\audio" /os:10_X64
