@@ -45,3 +45,7 @@ packaging/nuget/out/
 
 # agent workspace data: local notes and session state, never part of the project
 .workbuddy/
+
+# local benchmark baseline written by tools/daily-check.ps1: it describes this
+# computer, not the project, so it must never be committed.
+.daily-baseline.txt
