@@ -25,8 +25,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$stage = Join-Path $env:TEMP "openaes67-publish-$Version"
 $proxy = 'http://127.0.0.1:7890'
+$stage = Join-Path $env:TEMP "openaes67-publish-$Version"
 
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
 New-Item -ItemType Directory -Path $stage | Out-Null
@@ -41,11 +41,10 @@ $headers = @{
     "X-GitHub-Api-Version" = "2022-11-28"
     "User-Agent"     = "openaes67-release"
 }
-$proxyObj = New-Object System.Net.WebProxy($proxy)
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 
 function Get-Api([string]$uri) {
-    Invoke-RestMethod -Uri $uri -Headers $headers -Proxy $proxyObj -Method Get
+    Invoke-RestMethod -Uri $uri -Headers $headers -Proxy $proxy -Method Get
 }
 
 # ---------------------------------------------------------------- the run
@@ -57,9 +56,16 @@ Write-Host "  sha       : $($run.head_sha)"
 Write-Host "  concluded : $($run.conclusion)"
 
 # The tag has to point at what was built, or the release would ship artifacts
-# from a commit the tag does not name.
-$tagSha = (Get-Api "https://api.github.com/repos/ylzwd/openaes67/git/ref/tags/v$Version").object.sha
-Write-Host "  tag v$Version: $tagSha"
+# from a commit the tag does not name. A tag reference gives the tag object,
+# not the commit: an annotated tag has its own SHA, and peeling it is the only
+# way to compare the two.
+$tagRef = Get-Api "https://api.github.com/repos/ylzwd/openaes67/git/ref/tags/v$Version"
+$tagObject = $tagRef.object
+$tagSha = $tagObject.sha
+if ($tagObject.type -eq 'tag') {
+    $tagSha = (Get-Api "https://api.github.com/repos/ylzwd/openaes67/git/tags/$tagSha").object.sha
+}
+Write-Host "  tag v${Version}: $tagSha ($($tagObject.type))"
 if ($tagSha -ne $run.head_sha) {
     throw ("the tag v{0} points at {1} but the run built {2} -- move the tag first" -f `
            $Version, $tagSha.Substring(0,7), $run.head_sha.Substring(0,7))
@@ -72,7 +78,7 @@ $artifacts = (Get-Api "https://api.github.com/repos/ylzwd/openaes67/actions/runs
 foreach ($a in $artifacts) {
     $out = Join-Path $stage "$($a.name).zip"
     Invoke-WebRequest -Uri "https://api.github.com/repos/ylzwd/openaes67/actions/artifacts/$($a.id)/zip" `
-        -Headers $headers -Proxy $proxyObj -OutFile $out -MaximumRedirection 5
+        -Headers $headers -Proxy $proxy -OutFile $out -MaximumRedirection 5
     $dest = Join-Path $stage $a.name
     Expand-Archive -Path $out -DestinationPath $dest -Force
     Write-Host ("  {0,-24} {1,12:N0} bytes" -f $a.name, (Get-Item $out).Length)
@@ -169,7 +175,7 @@ $body = @{
 } | ConvertTo-Json -Depth 4
 
 $release = Invoke-RestMethod -Uri "https://api.github.com/repos/ylzwd/openaes67/releases" `
-    -Headers $headers -Proxy $proxyObj -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
+    -Headers $headers -Proxy $proxy -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) `
     -ContentType "application/json; charset=utf-8"
 Write-Host "  created: $($release.html_url)"
 
@@ -177,7 +183,7 @@ foreach ($asset in @($cli, $gui)) {
     $name = $asset.Name
     $bytes = [System.IO.File]::ReadAllBytes($asset.Path)
     $uploadUri = "https://uploads.github.com/repos/ylzwd/openaes67/releases/$($release.id)/assets?name=$name"
-    $up = Invoke-RestMethod -Uri $uploadUri -Headers $headers -Proxy $proxyObj -Method Post `
+    $up = Invoke-RestMethod -Uri $uploadUri -Headers $headers -Proxy $proxy -Method Post `
         -Body $bytes -ContentType "application/octet-stream"
     Write-Host ("  uploaded {0,-36} {1}" -f $up.name, $up.browser_download_url)
 }
