@@ -163,7 +163,7 @@ HKLM\SOFTWARE\Classes\CLSID\{...}\InprocServer32 -> DLL 路径
 ### 编译图形界面（可选）
 
 ```powershell
-cmake -S . -B build-qt -G "Visual Studio 17 2022" -A x64 -DOPENAES67_WITH_GUI=ON
+cmake -S . -B build-qt -G "Visual Studio 17 2022" -A x64
 cmake --build build-qt --config Release
 ```
 
@@ -564,6 +564,9 @@ nuget install OpenAES67 -Source openaes67
 
 见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。两条规则最重要：行为必须能追溯到公开标准，
 数字必须来自可复现的测量。
+
+项目结构、最近一次接管验证和待处理事项见
+[`项目接管记录`](docs/PROJECT-HANDOVER.zh-CN.md)；维护入口见 [`AGENTS.md`](AGENTS.md)。
 
 改动热路径（收包循环、共享环、ASIO 泵）前请先跑：
 

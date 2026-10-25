@@ -1,106 +1,48 @@
-# 迁移到 ylzwd/openaes67 — 操作指南
+# GitHub 迁移状态：已完成
 
-状态：**本地已全部就绪，只差在新账号登录后执行推送。**
+更新日期：2026-10-25（北京时间）。
 
-停用原因：原账号 `ylzwd123` 被 GitHub 停用（2026-10 发 v0.1.1 时撞上），远端 403 不可写也不可读。
+当前仓库为 [ylzwd/openaes67](https://github.com/ylzwd/openaes67)，本地 `main` 已跟踪 `origin/main`。已验证登录账号具备仓库管理权限，远端可读取，已有 `v0.1.0`、`v0.1.1` 发布记录。无需再次创建仓库、重做首次推送或重建已有标签。
 
----
+项目结构、验证结果、本机网络配置说明和后续维护事项见
+[`PROJECT-HANDOVER.zh-CN.md`](PROJECT-HANDOVER.zh-CN.md)。
 
-## 已完成（不需要再做任何事）
+## 日常同步
 
-| 项 | 状态 |
-|---|---|
-| 合规修复（SPDX 头 /商标声明 / ASIO 许可更新 / 凭据扫描门禁） | ✅ 提交 `58087d5` |
-| 仓库内12 处 `ylzwd123` 引用改为 `ylzwd` | ✅ 提交 `d1e2e5c` |
-| `git remote` 切到 `https://github.com/ylzwd/openaes67.git` | ✅ 已切换 |
-| 失效的 ylzwd123 凭据从keyring 清除 | ✅ 已清除 |
-| 完整历史备份 | ✅ `D:\dante项目\_openaes67_backup\openaes67-migration.bundle`（1.2 MB） |
-| 源码快照 | ✅ `D:\dante项目\_openaes67_backup\openaes67-source-d1e2e5c.zip`（1.3 MB） |
-| 门禁全绿 | ✅ `build.bat` → ALL CLAIMS HOLD + 320 断言 |
-
-当前状态：`main` @ `d1e2e5c`，21 个提交，1 个 tag（`v0.1.0`），工作区干净，
-git 对象完好，领先旧 origin 7 个提交。
-
----
-
-## 你需要做的三步
-
-### 第1 步：在 GitHub 网页建空仓库
-
-打开 https://github.com/new
-
-- Owner 选 **`ylzwd`**
-- Repository name 填 **`openaes67`**
-- **不要**勾选 Add a README file / .gitignore / License（会导致推送冲突）
-- Visibility 选 **Public**（要开源就选这个）
-- 点 Create repository
-
-### 第 2 步：本地登录新账号
+在仓库根目录执行：
 
 ```powershell
-gh auth login -h github.com
+gh auth status
+git status --short --branch
+git remote -v
+git fetch origin
+git rev-list --left-right --count HEAD...origin/main
 ```
 
-选 GitHub.com → HTTPS → 用浏览器登录 → 账号是 `ylzwd`。
+最后一条命令的两个数字分别为本地领先和落后的提交数。均为 0 表示已同步；若存在远端新增提交，先检查差异，再决定如何整合。
 
-> 如果 `gh` 浏览器登录不方便，改用 PAT：
-> https://github.com/settings/tokens → Generate new token (classic) →
-> 勾 `repo` + `write:packages` → 生成后复制，
-> 然后 `git remote set-url origin https://<TOKEN>@github.com/ylzwd/openaes67.git`
-> （推送完可以把 token 从 remote 里去掉）
-
-### 第 3 步：推送
+提交当前任务的变更并通过项目校验后，使用：
 
 ```powershell
-cd D:\dante项目\openaes67
-git push -u origin main --follow-tags
+git push origin main
+gh run list --repo ylzwd/openaes67 --limit 5
 ```
 
-看到 `main -> main` 和 `v0.1.0` 就成功了。去网页确认仓库内容。
+凭据通过 GitHub CLI 或系统凭据管理器保存，不把令牌放进远端 URL。需要重新登录时使用 `gh auth login -h github.com`，并保留不含凭据的远端地址 `https://github.com/ylzwd/openaes67.git`。
 
----
+## 历史备份
 
-## 推送成功后（可选）
+仓库旁的 `_openaes67_backup/` 保留迁移时的 Git bundle、源码快照和旧发布附件。bundle 的 `main` 指向 `d1e2e5c`，只是迁移时的恢复点，不包含后续所有维护提交。
 
-**建第一个 Release：**
+如需检查或恢复，选择一个新的空目录，在当前仓库根目录执行：
 
 ```powershell
-gh release create v0.1.1 --title "v0.1.1" --notes-file notes.md
+git bundle verify ..\_openaes67_backup\openaes67-migration.bundle
+git clone ..\_openaes67_backup\openaes67-migration.bundle recovered
 ```
 
-或直接跑项目自带的发版脚本（它幂等可续，CI 绿了才打 tag、自动打包上传）：
+恢复出的目录用于核对旧版本，不覆盖当前仓库。备份文件和本机构建结果不纳入源码推送。
 
-```powershell
-.\tools\release.ps1 -Version 0.1.1
-```
+## 版本发布
 
-**验证 CI：**
-
-```
-gh run list --limit 3
-```
-
-CI 有三个 job：build + self-test、policy checks、gui build（best-effort）。
-
----
-
-## 出问题怎么回滚
-
-完整历史在 bundle 里，任何时候都能恢复：
-
-```powershell
-git clone D:\dante项目\_openaes67_backup\openaes67-migration.bundle recovered
-```
-
-或者源码快照：
-
-```powershell
-Expand-Archive D:\dante项目\_openaes67_backup\openaes67-source-d1e2e5c.zip -DestinationPath recovered-src
-```
-
----
-
-## 保留在报告里的旧账号引用（故意不改）
-
-`docs/COMPLIANCE-REVIEW.md` 里还有两处 `ylzwd123` —— 那是停用事件的调查记录，
-改了就失真了。审查报告见 `docs/COMPLIANCE-REVIEW.md`。
+源码同步与二进制发布分别处理。需要发布新版本时，按 `CONTRIBUTING.md` 使用 `tools/release.ps1`，让标签对应通过 CI 的提交。现有版本和附件不因重新接管而改写。

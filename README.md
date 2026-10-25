@@ -177,7 +177,7 @@ Unregister with `.\asio_driver\unregister-asio-driver.bat`.
 ### Build the GUI (optional)
 
 ```powershell
-cmake -S . -B build-qt -G "Visual Studio 17 2022" -A x64 -DOPENAES67_WITH_GUI=ON
+cmake -S . -B build-qt -G "Visual Studio 17 2022" -A x64
 cmake --build build-qt --config Release
 ```
 

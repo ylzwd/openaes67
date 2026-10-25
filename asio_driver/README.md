@@ -26,7 +26,7 @@ Dante / AES67 network
 Audition (playback)
    → THIS ASIO DRIVER, output channels 0..63
    → shared ring, "capture" buffer         (driver writes, user mode reads)
-   → openaes67 send --shm <section>        (not implemented yet)
+   → openaes67 send --shm <section>        (reads the capture ring)
    → AES67 network
 ```
 
@@ -36,18 +36,15 @@ is inverted relative to WDM — here the *driver* is the consumer of network aud
 — but the mechanics and offsets are identical, which is why the ring is reused
 as-is.
 
-## Prerequisite: the ASIO SDK
+## Build requirements
 
-Steinberg's SDK is not redistributable, so it is not in this repository. Copy
-three files from the SDK's `common/` directory into `third_party/asio/`:
+The default sound-card build needs the MSVC x64 toolset and Windows SDK.
+It uses this repository's `asio_abi.h` declarations and does not require an
+external ASIO SDK. See `build-asio-driver.bat` for the build flags.
 
-```
-third_party/asio/iasiodrv.h
-third_party/asio/asio.h
-third_party/asio/asiosys.h
-```
-
-Download: Steinberg developer portal → ASIO SDK (accept the licence).
+This sound card is separate from the optional ASIO host backend in
+`src/audio_io_asio.cpp`. That backend is enabled with `build.bat asio` or
+`OPENAES67_WITH_ASIO` and requires separately supplied SDK headers.
 
 ## Build
 
@@ -55,8 +52,16 @@ Download: Steinberg developer portal → ASIO SDK (accept the licence).
 asio_driver\build-asio-driver.bat
 ```
 
-Without the header the script stops with a one-line explanation instead of
-producing a DLL that silently lacks ASIO (same rule as `build.bat asio`).
+The script builds `out/openaes67_asio64.dll` and `out/asio_host_test.exe`.
+From the repository root, test the DLL without registering it:
+
+```powershell
+.\asio_driver\out\asio_host_test.exe 2
+```
+
+For a duplex network connection, use `openaes67 bridge --channels 64
+--shm OpenAES67Audio` with the appropriate interface and multicast addresses;
+the shared receive and bridge implementations are used by both CLI and GUI.
 
 ## Register
 
@@ -77,10 +82,13 @@ HKLM\SOFTWARE\Classes\CLSID\{GUID}\InprocServer32
 
 - [x] Ring verified at 64 channels: `openaes67 recv --channels 64 --shm …` then
       `shm-read` reports `geometry: 64 ch @ 48000 Hz`, 48000 frames/s, peak 20000
-- [ ] Driver DLL: **not written yet** — it cannot be compiled or tested until the
-      SDK header is in place
-- [ ] `send --shm`: the output direction does not exist yet (today `send`
-      captures a render endpoint with WASAPI loopback)
+- [x] Driver DLL and standalone host test implemented and built in CI
+- [x] Output direction implemented by `send --shm` and the duplex `bridge` command
+
+The 2026-10-25 maintenance check rebuilt the DLL and passed the 2-second host
+test. This verifies the interface, callback and shared-ring path; real DAW and
+network interoperability need a separate test. See
+[`docs/PROJECT-HANDOVER.zh-CN.md`](../docs/PROJECT-HANDOVER.zh-CN.md).
 
 ## Honest limits
 
