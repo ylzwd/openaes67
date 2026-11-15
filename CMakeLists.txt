@@ -66,6 +66,9 @@ set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} /I${CMAKE_CURRENT_SOURCE_DIR}/include")
 add_executable(openaes67_selftest tests/selftest.cpp assets/app.rc)
 target_link_libraries(openaes67_selftest PRIVATE openaes67_core)
 
+add_executable(openaes67_multibridge_test tests/multibridge_test.cpp)
+target_link_libraries(openaes67_multibridge_test PRIVATE openaes67_core)
+
 # ---- CLI -------------------------------------------------------------------
 add_executable(openaes67 src/main.cpp assets/app.rc)
 target_link_libraries(openaes67 PRIVATE openaes67_core)

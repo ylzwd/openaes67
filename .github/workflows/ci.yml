@@ -25,6 +25,12 @@ jobs:
       - name: Self-test
         run: .\build\Release\openaes67_selftest.exe
 
+      - name: Multi-stream routes and UDP bridge
+        run: .\build\Release\openaes67_multibridge_test.exe
+
+      - name: Documentation claims
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\verify-claims.ps1 -BuildDir build\Release
+
       # The sound card is the reason most people are here, and it needs only the
       # MSVC toolset (the script finds vcvars itself). Building it in CI means the
       # release archive can contain it, instead of asking every user to install a

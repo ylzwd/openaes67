@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $excludeDirs = @('build', 'build-qt', 'dist', 'out', 'bin', 'obj', 'node_modules', '__pycache__', '.git')
 $codeExt = @('.cpp', '.h', '.hpp', '.c', '.bat', '.ps1', '.py', '.cmake', '.inf')
-$docExt = @('.md', '.txt', '.conf', '.sdp', '.json', '.yml', '.yaml')
+$docExt = @('.md', '.txt', '.conf', '.sdp', '.json', '.yml', '.yaml', '.routes')
 $findings = New-Object System.Collections.ArrayList
 
 function Add-Finding([string] $kind, [string] $file, [int] $line, [string] $text) {
@@ -29,7 +29,7 @@ function Get-Files([string[]] $extensions) {
         # Any path segment, not just the first: tools/__pycache__ is as much a
         # build artefact as build/ is.
         $parts = $rel.Split('\')
-        -not ($parts | Where-Object { $excludeDirs -contains $_ }) -and
+        -not ($parts | Where-Object { $excludeDirs -contains $_ -or $_ -like 'build*' }) -and
         ($extensions -contains $_.Extension.ToLower()) -and
         $_.Length -lt 2MB
     }
@@ -76,7 +76,7 @@ $junkExt = @('.tmp', '.bak', '.orig', '.rej', '.swp', '.log', '.err', '.obj', '.
 foreach ($file in Get-ChildItem $Root -Recurse -File -Force -ErrorAction SilentlyContinue) {
     $rel = $file.FullName.Substring($Root.Length + 1)
     $parts = $rel.Split('\')
-    if ($parts | Where-Object { $excludeDirs -contains $_ }) { continue }
+    if ($parts | Where-Object { $excludeDirs -contains $_ -or $_ -like 'build*' }) { continue }
     if ($junkExt -contains $file.Extension.ToLower()) {
         Add-Finding 'artefact' $rel 0 $file.Extension
     } elseif ($file.Name -in @('Thumbs.db', 'desktop.ini', '.DS_Store')) {

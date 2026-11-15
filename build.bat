@@ -63,6 +63,14 @@ cl /nologo /EHsc /std:c++17 /W4 /O2 /Oi /Gy /utf-8 /D_CRT_SECURE_NO_WARNINGS /DN
 if errorlevel 1 goto :fail
 
 
+echo === building and testing multi-stream routing ===
+cl /nologo /EHsc /std:c++17 /W4 /O2 /Oi /Gy /utf-8 /D_CRT_SECURE_NO_WARNINGS /DNOMINMAX !ASIO_DEF! /I include !ASIO_INC! ^
+   tests\multibridge_test.cpp !CORE! ^
+   ws2_32.lib ole32.lib uuid.lib advapi32.lib iphlpapi.lib winmm.lib shell32.lib /Fe:build\multibridge_test.exe /Fo:build\
+if errorlevel 1 goto :fail
+build\multibridge_test.exe
+if errorlevel 1 goto :fail
+
 rem Gate: the numbers and flags stated in the documentation must still hold.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\verify-claims.ps1"
 if errorlevel 1 (

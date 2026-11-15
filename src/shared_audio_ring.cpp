@@ -346,6 +346,8 @@ std::unique_ptr<SharedAudioRing> createSharedAudio(const wchar_t *name,
         }
         return nullptr;
     }
+    // A running driver may already own this name. Never reset its ring indices.
+    const bool existed = GetLastError() == ERROR_ALREADY_EXISTS;
     void *view = MapViewOfFile(section, FILE_MAP_ALL_ACCESS, 0, 0, bytes);
     if (!view) {
         CloseHandle(section);
@@ -356,11 +358,12 @@ std::unique_ptr<SharedAudioRing> createSharedAudio(const wchar_t *name,
     }
 
     std::unique_ptr<SharedAudioRing> ring(
-        new SharedAudioRing(view, bytes, cfg, /*initialize=*/true, /*ownMapping=*/true));
+        new SharedAudioRing(view, bytes, cfg, /*initialize=*/!existed, /*ownMapping=*/true));
     ring->section_ = section;
-    if (!ring->valid()) {
+    if (!ring->valid() || ring->channels() != cfg.channels ||
+        ring->sampleRate() != cfg.sampleRate || ring->capacityFrames() != cfg.capacityFrames) {
         if (err) {
-            *err = ring->error();
+            *err = ring->valid() ? "existing section has different audio geometry" : ring->error();
         }
         return nullptr;
     }

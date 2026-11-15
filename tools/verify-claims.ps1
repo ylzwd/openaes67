@@ -16,9 +16,10 @@
 .EXAMPLE
     pwsh tools/verify-claims.ps1
 #>
+param([string]$BuildDir = 'build')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$cliExe = Join-Path $root 'build\openaes67.exe'
+$cliExe = Join-Path (Join-Path $root $BuildDir) 'openaes67.exe'
 $failures = 0
 
 function Check($name, $ok, $detail) {
@@ -193,12 +194,16 @@ Check 'CMakeLists enables /W4'         ($cmake -match 'add_compile_options\(/W4'
 Check 'CMakeLists enables /utf-8'      ($cmake -match '/utf-8') 'expects /utf-8'
 
 # ---- self-test count -------------------------------------------------------
-$selftestExe = Join-Path $root 'build\selftest.exe'
+$selftestExe = Join-Path (Join-Path $root $BuildDir) 'selftest.exe'
+if (-not (Test-Path $selftestExe)) {
+    $selftestExe = Join-Path (Join-Path $root $BuildDir) 'openaes67_selftest.exe'
+}
 if (Test-Path $selftestExe) {
     $output = & $selftestExe 2>&1
+    $selftestExit = $LASTEXITCODE
     $count = ($output | Select-String '\[PASS\]|\[FAIL\]').Count
     $allPass = [bool]($output | Select-String 'ALL PASS')
-    Check 'self-test passes' $allPass "$count assertions"
+    Check 'self-test passes' ($allPass -and $selftestExit -eq 0) "$count assertions, exit=$selftestExit"
     foreach ($doc in @('README.md', 'CONTRIBUTING.md')) {
         $text = Read-Text $doc
         $m = [regex]::Match($text, '(\d+)\s+assertions')

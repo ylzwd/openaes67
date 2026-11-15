@@ -97,7 +97,8 @@ private:
     std::string           error_;
 };
 
-// Creates a named section (user mode acts as owner) and initialises its header.
+// Creates and initialises a named section; an existing compatible section is
+// attached without resetting data or indices. A geometry mismatch is an error.
 // Returns nullptr and fills `err` on failure.
 std::unique_ptr<SharedAudioRing> createSharedAudio(const wchar_t *name,
                                                    const SharedAudioConfig &cfg,

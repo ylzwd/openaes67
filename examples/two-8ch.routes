@@ -1,0 +1,6 @@
+# direction group port channels asio_first codec payload_type
+# ASIO channel numbers start at 1. Every route needs a different UDP port.
+rx 239.69.1.1 5004 8 1 L24 97
+rx 239.69.1.2 5006 8 9 L24 97
+tx 239.69.2.1 5010 8 1 L24 97
+tx 239.69.2.2 5012 8 9 L24 97
