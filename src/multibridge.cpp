@@ -135,20 +135,23 @@ void RoutedPlayout::reset() {
     for (size_t i = 0; i < slots_.size(); ++i) clearRoute(i);
     anchored_ = false;
     next_ = 0;
+    latestEnd_ = 0;
+    fraction_ = 0;
 }
 void RoutedPlayout::clearRoute(size_t route) {
     if (route < slots_.size()) for (auto &s : slots_[route]) s.valid = false;
 }
 bool RoutedPlayout::push(size_t route, uint32_t timestamp, const int16_t *samples) {
     if (route >= routes_.size() || !routes_[route].receive || !samples) return false;
-    if (!anchored_) { next_ = timestamp; anchored_ = true; }
+    if (!anchored_) { next_ = timestamp; latestEnd_ = timestamp; anchored_ = true; }
     const int64_t offset = delta(timestamp, next_);
     if (offset < 0 || offset + 48 > kWindow) return false;
+    if (delta(timestamp + 48, latestEnd_) > 0) latestEnd_ = timestamp + 48;
     const int channels = routes_[route].channels;
     // A power-of-two window remains collision-free across the 2^32 wrap.
     for (uint32_t f = 0; f < 48; ++f) {
         const uint32_t tag = timestamp + f;
-        auto &slot = slots_[route][tag & 4095u];
+        auto &slot = slots_[route][tag & (kWindow - 1)];
         if (slot.valid && slot.tag == tag) continue; // first duplicate wins
         slot.tag = tag;
         slot.valid = true;
@@ -157,22 +160,65 @@ bool RoutedPlayout::push(size_t route, uint32_t timestamp, const int16_t *sample
     return true;
 }
 uint32_t RoutedPlayout::pop(int16_t *out) {
-    std::fill_n(out, 48 * 64, int16_t(0));
+    return popFrames(out, 48, 0);
+}
+int RoutedPlayout::bufferedFrames() const {
+    return anchored_ ? static_cast<int>(std::max(int64_t(0), delta(latestEnd_, next_))) : 0;
+}
+uint32_t RoutedPlayout::popFrames(int16_t *out, int frames, double ppm) {
+    if (!out || frames < 0 || frames > 2400) return 0;
+    std::fill_n(out, frames * 64, int16_t(0));
+    const double ratio = 1.0 + (std::isfinite(ppm) ? std::clamp(ppm, -2000.0, 2000.0) : 0.0) * 1e-6;
     uint32_t missing = 0;
-    for (size_t i = 0; i < routes_.size(); ++i) {
-        const auto &r = routes_[i];
-        if (!r.receive) continue;
-        for (uint32_t f = 0; f < 48; ++f) {
-            const uint32_t tag = next_ + f;
-            auto &slot = slots_[i][tag & 4095u];
-            if (anchored_ && slot.valid && slot.tag == tag) {
-                std::copy_n(slot.samples.begin(), r.channels, out + f * 64 + r.asioFirst);
-                slot.valid = false;
-            } else missing += r.channels;
+    for (int f = 0; f < frames; ++f) {
+        for (size_t i = 0; i < routes_.size(); ++i) {
+            const auto &r = routes_[i];
+            if (!r.receive) continue;
+            const auto &a = slots_[i][next_ & (kWindow - 1)];
+            const auto &b = slots_[i][(next_ + 1) & (kWindow - 1)];
+            if (!anchored_ || !a.valid || a.tag != next_ ||
+                (fraction_ != 0 && (!b.valid || b.tag != next_ + 1))) {
+                missing += r.channels;
+                continue;
+            }
+            for (int c = 0; c < r.channels; ++c) {
+                const double value = a.samples[c] + (b.samples[c] - a.samples[c]) * fraction_;
+                out[f * 64 + r.asioFirst + c] = static_cast<int16_t>(std::lround(value));
+            }
+        }
+        if (!anchored_) continue;
+        fraction_ += ratio;
+        const int consume = static_cast<int>(fraction_);
+        fraction_ -= consume;
+        for (int n = 0; n < consume; ++n) {
+            for (auto &routeSlots : slots_) {
+                if (!routeSlots.empty()) routeSlots[next_ & (kWindow - 1)].valid = false;
+            }
+            ++next_;
         }
     }
-    if (anchored_) next_ += 48;
     return missing;
+}
+
+void PlayoutRateServo::reset() {
+    depthSeconds_ = seconds_ = integral_ = correction_ = 0;
+}
+void PlayoutRateServo::observe(int depth, double dt) {
+    if (!std::isfinite(dt) || dt <= 0 || dt > 0.1 || depth < 0 || depth > 8192) {
+        reset(); return;
+    }
+    depthSeconds_ += depth * dt;
+    seconds_ += dt;
+    if (seconds_ < 0.128) return;
+    const double error = depthSeconds_ / seconds_ - 1440.0; // 30 ms at 48 kHz
+    // Integrate only the excess outside a half-packet deadband. Freeze at the
+    // correction bound rather than winding up during an unrecoverable outage.
+    const double excess = error > 24 ? error - 24 : (error < -24 ? error + 24 : 0);
+    const double candidate = std::clamp(integral_ + 0.4 * excess * seconds_, -2000.0, 2000.0);
+    const double correction = 4.0 * excess + candidate;
+    if (std::fabs(correction) <= 2000 || correction * excess < 0) integral_ = candidate;
+    correction_ = std::clamp(4.0 * excess + integral_, -2000.0, 2000.0);
+    depthSeconds_ = seconds_ = 0;
 }
 
 bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
@@ -180,8 +226,9 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
     using Clock = std::chrono::steady_clock;
     using namespace std::chrono_literals;
     if (!validate(opt.routes, err)) return false;
-    if (!std::isfinite(opt.seconds) || opt.seconds < 0 || opt.shmName.empty())
-        return fail(err, "invalid duration or shared-memory name");
+    if (!std::isfinite(opt.seconds) || opt.seconds < 0 || opt.shmName.empty() ||
+        opt.renderQueueMs < 5 || opt.renderQueueMs > 50)
+        return fail(err, "invalid duration, shared-memory name or render queue (5..50 ms)");
     Winsock winsock;
     if (!winsock.ok()) return fail(err, "Winsock initialization failed");
     // A second multi-stream pump must never become another SPSC ring writer.
@@ -207,6 +254,8 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
     if (ring->channels() != 64 || ring->sampleRate() != 48000 ||
         ring->header()->frameBytes != 128)
         return fail(err, "multibridge requires a 64-channel 48000 Hz int16 shared section");
+    if (ring->capacityFrames() < static_cast<uint32_t>(48 * opt.renderQueueMs))
+        return fail(err, "shared section is smaller than the requested render queue");
     struct Flow {
         std::unique_ptr<UdpSocket> rx;
         std::unique_ptr<RtpSender> tx;
@@ -235,18 +284,46 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
     }
     MultiBridgeStats stats;
     RoutedPlayout playout(opt.routes);
+    PlayoutRateServo servo;
     std::array<uint8_t, 65536> packet{};
     std::array<int16_t, 48 * 8> samples{};
-    std::array<int16_t, 48 * 64> render{}, capture{};
+    std::vector<int16_t> render(2400 * 64); // allocated once, never in the pump loop
+    std::array<int16_t, 48 * 64> capture{};
     const auto start = Clock::now();
     auto deadline = start, lastAccepted = start, readyAt = start;
+    auto lastHostRead = start, lastControl = start, nextReport = start + 1s;
+    const auto readPosition = [&] {
+        return static_cast<uint32_t>(InterlockedCompareExchange(
+            reinterpret_cast<volatile LONG *>(&ring->header()->readIndex), 0, 0));
+    };
+    uint32_t previousRead = readPosition();
+    // Bound the render queue, rather than filling a one-second ring
+    // while the host is stopped. Only the driver owns its read index.
+    const int renderTarget = 48 * opt.renderQueueMs;
     // All tx routes share one epoch; this is a local clock, not a PTP claim.
     uint32_t txTimestamp = static_cast<uint32_t>(start.time_since_epoch().count());
     while ((!opt.shouldStop || !opt.shouldStop()) &&
            (opt.seconds == 0 || std::chrono::duration<double>(Clock::now() - start).count() < opt.seconds)) {
         const auto now = Clock::now();
+        if (hasRx) {
+            const uint32_t read = readPosition();
+            if (read != previousRead) {
+                if (!stats.hostActive) {
+                    playout.reset(); servo.reset();
+                    for (auto &f : flows) f.locked = false;
+                    ++stats.hostResumes;
+                }
+                stats.hostActive = true;
+                previousRead = read; lastHostRead = now;
+            } else if (stats.hostActive && now - lastHostRead >= 250ms) {
+                stats.hostActive = false;
+                playout.reset(); servo.reset();
+                ++stats.hostPauses;
+            }
+        }
         if (playout.anchored() && now - lastAccepted >= 1s) {
             playout.reset();
+            servo.reset();
             for (auto &f : flows) f.locked = false;
             ++stats.restarts;
         }
@@ -265,6 +342,7 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
                     !readRtpHeader(packet.data(), size_t(bytes), &h) || h.payloadType != r.payloadType) {
                     ++stats.rejectedPackets; continue;
                 }
+                if (!stats.hostActive) { ++stats.waitingHostPackets; continue; }
                 if (flow.locked && h.ssrc != flow.ssrc) {
                     if (now - flow.last < 1s) { ++stats.rejectedPackets; continue; }
                     playout.clearRoute(i);
@@ -276,16 +354,29 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
                 if (!playout.push(i, h.timestamp, samples.data())) {
                     ++stats.timestampRejects; continue;
                 }
-                if (!wasAnchored) readyAt = now + 30ms;
+                if (!wasAnchored) readyAt = now + std::chrono::milliseconds(std::max(30, opt.renderQueueMs));
                 flow.locked = true; flow.ssrc = h.ssrc; flow.last = now;
                 lastAccepted = now;
                 ++stats.rxPackets;
             }
         }
-        if (playout.anchored() && now >= readyAt)
-            stats.missingChannelFrames += playout.pop(render.data());
-        else render.fill(0);
-        if (hasRx) stats.renderDroppedFrames += 48 - ring->writeRender(render.data(), 48);
+        if (hasRx) {
+            const int wanted = std::clamp(renderTarget - ring->renderPending(), 0, renderTarget);
+            const bool playing = stats.hostActive && playout.anchored() && now >= readyAt;
+            if (playing) {
+                if (now - lastAccepted < 100ms)
+                    servo.observe(playout.bufferedFrames(), std::chrono::duration<double>(now - lastControl).count());
+                else servo.reset(); // a source outage is not clock drift
+                stats.missingChannelFrames += playout.popFrames(render.data(), wanted, servo.correctionPpm());
+            } else {
+                std::fill_n(render.data(), wanted * 64, int16_t(0));
+            }
+            stats.renderDroppedFrames += wanted - ring->writeRender(render.data(), wanted);
+            stats.renderPendingFrames = ring->renderPending();
+            stats.rxBufferedFrames = playout.bufferedFrames();
+            stats.rxCorrectionPpm = servo.correctionPpm();
+        }
+        lastControl = now;
         const int got = hasTx ? ring->readCapture(capture.data(), 48) : 48;
         std::fill(capture.begin() + got * 64, capture.end(), int16_t(0));
         stats.captureMissingFrames += 48 - got;
@@ -306,7 +397,11 @@ bool runMultiBridge(const MultiBridgeOptions &opt, MultiBridgeStats *result,
             const auto missed = std::chrono::duration_cast<std::chrono::milliseconds>(after - deadline).count();
             txTimestamp += static_cast<uint32_t>(missed * 48);
             deadline += std::chrono::milliseconds(missed);
-            playout.reset(); ++stats.scheduleResets;
+            playout.reset(); servo.reset(); ++stats.scheduleResets;
+        }
+        if (opt.report && after >= nextReport) {
+            opt.report(stats);
+            nextReport = after + 1s;
         }
         std::this_thread::sleep_until(deadline);
     }

@@ -118,6 +118,7 @@ static void usage() {
         "  --rtcp           send/receive RTCP reports on port+1\n"
         "  --config FILE    read defaults from a key = value file; flags still win\n"
         "  --routes FILE    routes/multibridge: saved rx/tx channel routes\n"
+        "  --render-ms N    multibridge: render queue, 5-50 ms (default 10)\n"
         "  --sap            announce the stream over SAP\n"
         "  --sap-interval N base announcement interval in seconds (default 30)\n"
         "  --refclk SPEC    ptp:<gmid>[:<domain>] or local (ts-refclk for the SDP)\n"
@@ -291,6 +292,7 @@ int outBits = 16;                // rx: WAV bit depth of the capture (16 or 24)
     bool   usePtp = false;     // recv: feed the PTP rate estimate to the controller
     std::wstring shmName;      // recv: write into this shared section instead of a device
     std::string routesPath;
+    int renderQueueMs = 10;
     const bool multiCommand = cmd == "routes" || cmd == "multibridge";
     if (multiCommand) seconds = 0;
 std::string  sendGroup;        // bridge: uplink multicast group
@@ -361,7 +363,7 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
         const char *a = argv[i];
         const char *v = (i + 1 < argc) ? argv[i + 1] : nullptr;
         if (multiCommand && std::strcmp(a, "--routes") && std::strcmp(a, "--iface") &&
-            std::strcmp(a, "--shm") && std::strcmp(a, "--seconds")) {
+            std::strcmp(a, "--shm") && std::strcmp(a, "--seconds") && std::strcmp(a, "--render-ms")) {
             std::fprintf(stderr, "%s: unsupported option %s\n", cmd.c_str(), a);
             return 1;
         }
@@ -375,6 +377,15 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
         }
         if (optEq(a, "--iface") && v)          { cfg.ifaceIp = v; ++i; }
         else if (optEq(a, "--routes") && v)    { routesPath = v; ++i; }
+        else if (optEq(a, "--render-ms") && v) {
+            char *end = nullptr;
+            const long ms = std::strtol(v, &end, 10);
+            if (!multiCommand || end == v || *end || ms < 5 || ms > 50) {
+                std::fprintf(stderr, "--render-ms requires multibridge and an integer from 5 to 50\n");
+                return 1;
+            }
+            renderQueueMs = static_cast<int>(ms); ++i;
+        }
         else if (optEq(a, "--config") && v)        { ++i; }   // read in the pre-pass
         else if (optEq(a, "--group") && v)     { cfg.group = v; ++i; }
         else if (optEq(a, "--group") && v)     { cfg.group = v; groupGiven = true; ++i; }
@@ -466,10 +477,17 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
         if (cmd == "routes") return 0;
         MultiBridgeOptions opt;
         opt.routes = routes; opt.ifaceIp = cfg.ifaceIp; opt.seconds = seconds;
+        opt.renderQueueMs = renderQueueMs;
         if (!shmName.empty()) opt.shmName = shmName;
         opt.shouldStop = [] { return multiBridgeStop.load(); };
+        opt.report = [](const MultiBridgeStats &s) {
+            std::printf("rx_host=%s rx=%llu tx=%llu rx_buffer=%d render_pending=%d rx_correction=%.1f ppm\n",
+                s.hostActive ? "active" : "waiting", s.rxPackets, s.txPackets,
+                s.rxBufferedFrames, s.renderPendingFrames, s.rxCorrectionPpm);
+        };
         std::printf("Experimental 48 kHz / 1 ms / int16 bridge. RX sources must share an RTP epoch.\n"
-                    "Local pacing; no PTP discipline or SAP. Stop with Ctrl+C.\n");
+                    "RX follows host consumption with rate correction; TX uses local pacing. No PTP or SAP. Stop with Ctrl+C.\n");
+        std::printf("RX render queue target: %d ms (must cover the host buffer).\n", renderQueueMs);
         if (!SetConsoleCtrlHandler(stopMultiBridge, TRUE)) {
             std::fprintf(stderr, "cannot install console stop handler\n");
             return 2;
@@ -482,6 +500,9 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             stats.rxPackets, stats.rejectedPackets, stats.timestampRejects, stats.txPackets, stats.txErrors,
             stats.missingChannelFrames, stats.renderDroppedFrames, stats.captureMissingFrames,
             stats.restarts, stats.scheduleResets);
+        std::printf("host_pauses=%llu host_resumes=%llu waiting_host_packets=%llu rx_buffer=%d render_pending=%d rx_correction=%.1f ppm\n",
+            stats.hostPauses, stats.hostResumes, stats.waitingHostPackets,
+            stats.rxBufferedFrames, stats.renderPendingFrames, stats.rxCorrectionPpm);
         if (!ok) std::fprintf(stderr, "multibridge: %s\n", err.c_str());
         return ok ? (stats.txErrors ? 3 : 0) : 2;
     }

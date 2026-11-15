@@ -13,6 +13,7 @@
 - `src/receive_loop.cpp`：CLI 与 GUI 共用的接收流程，保持共用实现。
 - `src/bridge.cpp`：单流双向网络与共享内存桥接。
 - `src/multibridge.cpp`：实验性多流路由、时间戳缓冲和统一共享环泵；限制见 `docs/MULTISTREAM.zh-CN.md`。
+- 多流接收使用共同重采样相位和宿主消费反馈；改动时验证虚拟漂移及宿主暂停恢复，不能把模拟结果等同实机 PTP 同步。
 - `include/openaes67/`：公共接口；`src/`：协议、缓冲、时钟及音频后端。
 - `asio_driver/`：用户态 ASIO 声卡；`driver/`：实验性 WDM/PortCls 内核驱动，两者不要混淆。
 - `asio_driver/asio_abi.h` 支持默认声卡构建；可选的宿主 ASIO 后端仍由 `OPENAES67_WITH_ASIO` 和 SDK 配置控制。

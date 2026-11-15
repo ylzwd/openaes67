@@ -14,6 +14,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <map>
 #include <thread>
@@ -103,14 +104,19 @@ static void unitTests() {
 }
 
 // Real UDP multicast + shared memory; the audio host is simulated, not hardware.
-static void integrationTest() {
+static void integrationTest(int hostBlock) {
     using Clock = std::chrono::steady_clock;
     using namespace std::chrono_literals;
     Winsock winsock;
     std::string err;
     MultiBridgeOptions opt;
+    int reports = 0, reportedPeak = 0;
+    opt.report = [&](const MultiBridgeStats &s) {
+        ++reports; reportedPeak = std::max(reportedPeak, s.renderPendingFrames);
+    };
     parseAudioRoutes(preset, &opt.routes, &err);
     opt.ifaceIp = "127.0.0.1";
+    opt.renderQueueMs = hostBlock > 480 ? 50 : 10;
     opt.shmName = L"OpenAES67MultiIntegration-" + std::to_wstring(GetCurrentProcessId());
     std::atomic<bool> stop{false};
     opt.shouldStop = [&] { return stop.load(); };
@@ -132,10 +138,10 @@ static void integrationTest() {
     RtpSender downB(stream, 200);
     check(downA.start(&err) && downB.start(&err), "integration rx senders");
     std::array<int16_t, 384> a{}, b{};
-    std::array<int16_t, 3072> capture{}, render{};
-    for (int f = 0; f < 48; ++f) for (int c = 0; c < 64; ++c) {
+    std::vector<int16_t> capture(2048 * 64), render(2048 * 64);
+    for (int f = 0; f < 2048; ++f) for (int c = 0; c < 64; ++c) {
         capture[f * 64 + c] = static_cast<int16_t>(1000 + c);
-        if (c < 8) { a[f * 8 + c] = static_cast<int16_t>(100 + c); b[f * 8 + c] = static_cast<int16_t>(200 + c); }
+        if (f < 48 && c < 8) { a[f * 8 + c] = static_cast<int16_t>(100 + c); b[f * 8 + c] = static_cast<int16_t>(200 + c); }
     }
     MultiBridgeStats stats;
     bool bridgeOk = false;
@@ -144,7 +150,10 @@ static void integrationTest() {
     const auto start = Clock::now();
     auto next = start;
     bool both = false, gap = false, resumed = false, txA = false, txB = false;
-    bool crosstalk = false;
+    bool crosstalk = false, hostRecovered = false;
+    int peakRender = 0;
+    int hostDue = 0;
+    int shortHostReads = 0;
     int matchedEpochs = 0;
     std::map<uint32_t, unsigned> epochs;
     uint32_t stamp = 100000;
@@ -153,7 +162,7 @@ static void integrationTest() {
     UdpSocket rogue;
     check(rogue.openSender(opt.ifaceIp, 1, &err), "integration malformed-packet injector");
     bool injected = false, duplicateOwnerRejected = false;
-    while (Clock::now() - start < 3800ms) {
+    while (Clock::now() - start < 4200ms) {
         const auto elapsed = Clock::now() - start;
         if (!injected && elapsed > 250ms && both) {
             RtpHeader h; h.ssrc = 999; h.timestamp = stamp; h.payloadType = 97;
@@ -174,23 +183,37 @@ static void integrationTest() {
         // One-flow gap, then an all-flow outage > 1 s and a new media epoch.
         const bool outage = elapsed > 1100ms && elapsed < 2350ms;
         const bool onlyA = elapsed > 500ms && elapsed < 850ms;
+        const bool hostPaused = elapsed > 3000ms && elapsed < 3400ms;
+        if (elapsed >= 3400ms)
+            for (int f = 0; f < 48; ++f) for (int c = 0; c < 8; ++c)
+                a[f * 8 + c] = static_cast<int16_t>(300 + c);
         if (!outage) {
             const uint32_t ts = elapsed >= 2350ms ? stamp + 1000000 : stamp;
             downA.sendFramesAt(ts, a.data(), 48);
             if (!onlyA) downB.sendFramesAt(ts, b.data(), 48);
         }
         stamp += 48;
-        host->writeCapture(capture.data(), 48);
+        hostDue = hostPaused ? 0 : hostDue + 48;
+        const bool hostTick = !hostPaused && hostDue >= hostBlock;
+        if (hostTick) { hostDue -= hostBlock; host->writeCapture(capture.data(), hostBlock); }
+        peakRender = std::max(peakRender, host->renderPending());
         int frames = 0;
-        while ((frames = host->readRender(render.data(), 48)) > 0) {
+        // Fixed host blocks run at a 48 kHz clock; do not drain unlimited frames.
+        if (hostTick) {
+            frames = host->readRender(render.data(), hostBlock);
+            if (elapsed > 200ms && frames != hostBlock) ++shortHostReads;
+        }
+        if (frames > 0) {
             for (int f = 0; f < frames; ++f) {
                 const auto *v = render.data() + f * 64;
                 if (v[0] == 100 && v[8] == 200) {
                     both = true; if (elapsed > 2500ms) resumed = true;
                 }
                 if (elapsed > 600ms && elapsed < 850ms && v[0] == 100 && v[8] == 0) gap = true;
+                if (elapsed > 3500ms && v[0] == 300 && v[8] == 200) hostRecovered = true;
                 for (int c = 0; c < 64; ++c) {
-                    const int expected = c < 8 ? 100 + c : (c < 16 ? 200 + c - 8 : 0);
+                    const int expected = c < 8 ? (elapsed > 3560ms ? 300 : 100) + c : (c < 16 ? 200 + c - 8 : 0);
+                    if (c < 8 && elapsed >= 3400ms && elapsed <= 3560ms && v[c] == 300 + c) continue;
                     crosstalk |= v[c] != 0 && v[c] != expected;
                 }
             }
@@ -228,13 +251,84 @@ static void integrationTest() {
     check(stats.rxPackets > 100 && stats.txPackets > 100, "integration exchanged real packets");
     check(injected && stats.rejectedPackets >= 4, "active SSRC conflict, extension, wrong PT and short packet rejected");
     check(duplicateOwnerRejected, "second pump cannot become a concurrent shared-ring writer");
-    std::printf("UDP simulation: rx=%llu tx=%llu restarts=%llu schedule_resets=%llu matched_tx=%d\n",
-        stats.rxPackets, stats.txPackets, stats.restarts, stats.scheduleResets, matchedEpochs);
+    check(hostRecovered && stats.hostPauses >= 1 && stats.hostResumes >= 2, "host pause reanchors fresh media on resume");
+    check(peakRender <= 48 * opt.renderQueueMs && stats.renderDroppedFrames == 0, "render backlog stays within configured target while host stops");
+    check(reports >= 3 && reportedPeak <= 48 * opt.renderQueueMs, "live reports expose bounded buffer depth");
+    check(shortHostReads == 0, "configured queue supplies complete host blocks after startup");
+    std::printf("UDP simulation: host_block=%d rx=%llu tx=%llu restarts=%llu schedule_resets=%llu matched_tx=%d\n",
+        hostBlock, stats.rxPackets, stats.txPackets, stats.restarts, stats.scheduleResets, matchedEpochs);
+}
+
+// Accelerated virtual time: independent network and host clocks for two minutes.
+// Constant inter-channel offsets make any split resampling phase observable.
+static void driftTests() {
+    std::vector<AudioRoute> routes;
+    std::string err;
+    parseAudioRoutes(preset, &routes, &err);
+    const double scenarios[][2] = {{100, 0}, {-100, 0}, {0, 500}, {0, -500}};
+    for (const auto &scenario : scenarios) {
+        const double networkPpm = scenario[0], hostPpm = scenario[1];
+        RoutedPlayout play(routes);
+        PlayoutRateServo servo;
+        std::array<int16_t, 384> a{}, b{};
+        std::array<int16_t, 256 * 64> out{};
+        uint32_t stamp = 0xffffffe0u;
+        bool accepted = true, aligned = true;
+        auto send = [&] {
+            for (uint32_t f = 0; f < 48; ++f) for (int c = 0; c < 8; ++c) {
+                a[f * 8 + c] = static_cast<int16_t>(1000 + ((stamp + f) & 1023u) + c * 16);
+                b[f * 8 + c] = static_cast<int16_t>(a[f * 8 + c] + 8000);
+            }
+            accepted &= play.push(0, stamp, a.data()) && play.push(1, stamp, b.data());
+            stamp += 48;
+        };
+        for (int n = 0; n < 30; ++n) send();
+        double networkDue = 0, hostDue = 0, ppmSum = 0, depthSum = 0;
+        uint64_t missing = 0;
+        int minDepth = 4096, maxDepth = 0;
+        for (int tick = 0; tick < 120000; ++tick) {
+            networkDue += 48 * (1 + networkPpm * 1e-6);
+            while (networkDue >= 48) { send(); networkDue -= 48; }
+            const int depth = play.bufferedFrames();
+            servo.observe(depth, 0.001);
+            hostDue += 48 * (1 + hostPpm * 1e-6);
+            if (hostDue >= 256) {
+                hostDue -= 256;
+                missing += play.popFrames(out.data(), 256, servo.correctionPpm());
+                for (int f = 0; f < 256; ++f) {
+                    for (int c = 0; c < 8; ++c)
+                        aligned &= std::abs(int(out[f * 64 + c + 8]) - out[f * 64 + c] - 8000) <= 1;
+                    aligned &= out[f * 64 + 16] == 0 && out[f * 64 + 63] == 0;
+                }
+            }
+            if (tick > 20000) { minDepth = std::min(minDepth, depth); maxDepth = std::max(maxDepth, depth); }
+            if (tick >= 100000) { ppmSum += servo.correctionPpm(); depthSum += depth; }
+        }
+        const double expected = ((1 + networkPpm * 1e-6) / (1 + hostPpm * 1e-6) - 1) * 1e6;
+        const double meanPpm = ppmSum / 20000;
+        std::printf("Drift simulation: network=%+.0f host=%+.0f ppm, correction=%+.1f, depth=%d..%d, mean=%.1f, missing=%llu\n",
+            networkPpm, hostPpm, meanPpm, minDepth, maxDepth, depthSum / 20000, missing);
+        check(accepted && missing == 0, "120-second drift simulation has no late packets or missing samples");
+        check(aligned, "all routes retain common interpolation phase and unused channels stay silent");
+        check(minDepth > 900 && maxDepth < 2000, "drift servo keeps media buffer bounded near 30 ms");
+        check(std::fabs(meanPpm - expected) < 50, "rate correction converges to measured virtual clock difference");
+    }
+    PlayoutRateServo servo;
+    for (int n = 0; n < 5000; ++n) servo.observe(4096, 0.001);
+    check(servo.correctionPpm() == 2000, "positive correction bounded");
+    servo.reset();
+    for (int n = 0; n < 5000; ++n) servo.observe(0, 0.001);
+    check(servo.correctionPpm() == -2000, "negative correction bounded");
+    servo.observe(1440, 1);
+    check(servo.correctionPpm() == 0, "scheduler stall resets control history");
 }
 int main() {
     timeBeginPeriod(1);
     unitTests();
-    integrationTest();
+    driftTests();
+    integrationTest(48);
+    integrationTest(256);
+    integrationTest(2048);
     timeEndPeriod(1);
     std::printf("MULTIBRIDGE %s (%d checks, %d failures)\n", failures ? "FAIL" : "PASS", checks, failures);
     return failures ? 1 : 0;

@@ -15,7 +15,12 @@ Full engineering notes — measurements, dead ends, and why each decision was ma
 - Experimental `routes` and `multibridge` CLI commands: saved, validated channel
   maps; up to eight 1–8-channel streams per direction on the 64-channel ASIO ring;
   timestamp-based playout, silence for gaps and recovery after all RX sources stop.
-  Fixed 48 kHz / 1 ms profile, shared RX media epoch required, local pacing only.
+  Fixed 48 kHz / 1 ms profile, shared RX media epoch required; TX uses local pacing.
+- Host-paced multi-stream reception with a bounded render queue (10 ms default,
+  5–50 ms via `--render-ms`, including 2048-frame host buffers),
+  common-phase linear interpolation and a +/-2000 ppm buffer-depth servo.
+  Host pauses re-anchor fresh media on resume; live reports expose RX queue
+  depth and rate correction. Virtual two-minute tests cover independent clocks.
 - Dedicated deterministic routing and UDP/shared-memory integration tests in both
   build paths and CI. Claim verification now accepts a CMake build directory.
 
