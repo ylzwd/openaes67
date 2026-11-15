@@ -11,7 +11,8 @@
 
 - `src/main.cpp`：CLI；`src/gui/main_gui.cpp`：Qt 界面。
 - `src/receive_loop.cpp`：CLI 与 GUI 共用的接收流程，保持共用实现。
-- `src/bridge.cpp`：双向网络与共享内存桥接。
+- `src/bridge.cpp`：单流双向网络与共享内存桥接。
+- `src/multibridge.cpp`：实验性多流路由、时间戳缓冲和统一共享环泵；限制见 `docs/MULTISTREAM.zh-CN.md`。
 - `include/openaes67/`：公共接口；`src/`：协议、缓冲、时钟及音频后端。
 - `asio_driver/`：用户态 ASIO 声卡；`driver/`：实验性 WDM/PortCls 内核驱动，两者不要混淆。
 - `asio_driver/asio_abi.h` 支持默认声卡构建；可选的宿主 ASIO 后端仍由 `OPENAES67_WITH_ASIO` 和 SDK 配置控制。
@@ -27,7 +28,8 @@
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\scan-secrets.ps1
 ```
 
-- `build.bat` 编译 CLI、自检程序，并执行 `tools/verify-claims.ps1`。
+- `build.bat` 编译 CLI、自检程序，运行多流测试并执行 `tools/verify-claims.ps1`。
+- 多流测试：直接构建运行 `build/multibridge_test.exe`，CMake 运行 `<构建目录>/Release/openaes67_multibridge_test.exe`。
 - CMake 构建使用 Visual Studio 2022 x64；Qt 6 通过 `CMAKE_PREFIX_PATH` 查找，找到后才生成 GUI 目标。
 - CMake 自检程序为 `<构建目录>/Release/openaes67_selftest.exe`；直接构建的自检程序为 `build/selftest.exe`。
 - 自检使用固定临时文件名，串行运行各构建路径的自检和声明校验，避免并发争用。

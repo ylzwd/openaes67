@@ -12,6 +12,13 @@ Full engineering notes — measurements, dead ends, and why each decision was ma
 
 ### Added
 
+- Experimental `routes` and `multibridge` CLI commands: saved, validated channel
+  maps; up to eight 1–8-channel streams per direction on the 64-channel ASIO ring;
+  timestamp-based playout, silence for gaps and recovery after all RX sources stop.
+  Fixed 48 kHz / 1 ms profile, shared RX media epoch required, local pacing only.
+- Dedicated deterministic routing and UDP/shared-memory integration tests in both
+  build paths and CI. Claim verification now accepts a CMake build directory.
+
 - `tools/sign-binaries.ps1`: Authenticode signing and verification, with the PFX
   password taken from the environment and an explicit failure when a signature is
   present but untrusted.
@@ -24,6 +31,11 @@ Full engineering notes — measurements, dead ends, and why each decision was ma
 - DSCP marking: audio at EF (46), PTP at CS6 (48). Verified by a `getsockopt`
   round trip in the self-test, not by trusting `setsockopt`.
 - A startup note when a flow exceeds the AES67 8-channel limit.
+
+### Fixed
+
+- Attaching an existing compatible shared-audio section no longer resets active
+  ring indices or audio samples; incompatible geometry is rejected.
 
 ## [0.1.1] — 2026-10-24
 

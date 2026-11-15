@@ -645,6 +645,19 @@ ships and why LGPL v3 is satisfied.
 
 ## CLI reference
 
+**Experimental multi-stream ASIO bridge:** `routes --routes FILE` validates and
+previews a saved table; `multibridge --routes FILE --iface <ip>` runs it. See
+[`examples/two-8ch.routes`](examples/two-8ch.routes) and the
+[Chinese guide](docs/MULTISTREAM.zh-CN.md). Only `--routes`, `--iface`, `--shm`
+and `--seconds` are accepted by these commands. Duration defaults to unlimited
+(zero); Ctrl+C stops the pump. Each route has 1–8 channels and a distinct UDP
+port. Up to eight routes per direction map into the 64-channel int16 ring at
+48 kHz / 1 ms. RX sources must share an RTP media epoch. This local-clock
+prototype does not provide PTP discipline, rate correction, SAP, RTCP or GUI
+routing, and has not passed an eight-hour hardware interoperability test.
+`build.bat` also runs the dedicated multi-stream tests; CMake users run
+`Release/openaes67_multibridge_test.exe` after building.
+
 `openaes67 help` prints the same list. Defaults are shown where they apply.
 
 **Stream definition** (all commands)

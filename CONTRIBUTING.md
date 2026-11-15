@@ -31,6 +31,9 @@ cmake --build build --config Release
 
 # Self-test: 321 assertions covering RTP, SDP, SAP, PTP, jitter buffer and rate control
 .\build\Release\openaes67_selftest.exe
+
+# Multi-stream routing and UDP/shared-memory host simulation (no audio hardware)
+.\build\Release\openaes67_multibridge_test.exe
 ```
 
 Requirements: Visual Studio 2022 (or Build Tools) with the C++ workload and the
@@ -39,6 +42,7 @@ Windows 10/11 SDK. The Qt GUI is optional and only built when CMake finds Qt 6.
 ## Before opening a pull request
 
 - `openaes67_selftest.exe` prints `ALL PASS (0 failures)`
+- `openaes67_multibridge_test.exe` prints `MULTIBRIDGE PASS` after routing changes
 - both build paths succeed (`build.bat` and CMake)
 - no new occurrence of vendor identifiers, licence checks or telemetry
 - if you changed behaviour on the audio path, include a measurement

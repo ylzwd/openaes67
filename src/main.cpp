@@ -41,6 +41,7 @@
 #include "openaes67/asio_probe.h"
 #include "openaes67/bench.h"
 #include "openaes67/bridge.h"
+#include "openaes67/multibridge.h"
 #include "openaes67/cli_config.h"
 #include "openaes67/version.h"
 #include "openaes67/doctor.h"
@@ -60,6 +61,12 @@ using namespace openaes67;
 #define OPENAES67_VERSION "0.0.0-dev"
 #endif
 static const char *kVersion = OPENAES67_VERSION;
+static std::atomic<bool> multiBridgeStop{false};
+static BOOL WINAPI stopMultiBridge(DWORD event) {
+    if (event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT) return FALSE;
+    multiBridgeStop.store(true);
+    return TRUE;
+}
 
 // Payload budget per packet: a 1500-byte MTU minus IPv4 (20), UDP (8) and RTP (12)
 // headers is 1460, rounded down to a multiple of 16. Above this the datagram is
@@ -85,6 +92,8 @@ static void usage() {
         "  send           WASAPI loopback -> AES67\n"
         "  recv           AES67 -> render device\n"
         "  bridge         both directions through a shared ring (sound-card mode)\n"
+        "  routes         validate and preview a saved multi-stream route table\n"
+        "  multibridge    experimental multi-stream 64-channel ASIO bridge\n"
         "  capture        WASAPI loopback -> WAV (diagnostic)\n"
         "  capture-in     WASAPI input endpoint -> WAV (diagnostic)\n"
         "  play           WAV -> default render device (diagnostic)\n"
@@ -108,6 +117,7 @@ static void usage() {
         "  --ssrc HEX       RTP SSRC (default: random per run, per RFC 3550)\n"
         "  --rtcp           send/receive RTCP reports on port+1\n"
         "  --config FILE    read defaults from a key = value file; flags still win\n"
+        "  --routes FILE    routes/multibridge: saved rx/tx channel routes\n"
         "  --sap            announce the stream over SAP\n"
         "  --sap-interval N base announcement interval in seconds (default 30)\n"
         "  --refclk SPEC    ptp:<gmid>[:<domain>] or local (ts-refclk for the SDP)\n"
@@ -280,6 +290,9 @@ int outBits = 16;                // rx: WAV bit depth of the capture (16 or 24)
     double pacePpm = 0.0;      // tx: send faster (+) or slower (-) than realtime
     bool   usePtp = false;     // recv: feed the PTP rate estimate to the controller
     std::wstring shmName;      // recv: write into this shared section instead of a device
+    std::string routesPath;
+    const bool multiCommand = cmd == "routes" || cmd == "multibridge";
+    if (multiCommand) seconds = 0;
 std::string  sendGroup;        // bridge: uplink multicast group
 uint16_t     sendPort = 0;      // bridge: uplink port (0 = recv port + 2)
 bool         discoverStream = false;   // bridge: find the downlink over SAP
@@ -347,7 +360,21 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
 
         const char *a = argv[i];
         const char *v = (i + 1 < argc) ? argv[i + 1] : nullptr;
+        if (multiCommand && std::strcmp(a, "--routes") && std::strcmp(a, "--iface") &&
+            std::strcmp(a, "--shm") && std::strcmp(a, "--seconds")) {
+            std::fprintf(stderr, "%s: unsupported option %s\n", cmd.c_str(), a);
+            return 1;
+        }
+        if (multiCommand && optEq(a, "--seconds") && v) {
+            char *end = nullptr;
+            const double duration = std::strtod(v, &end);
+            if (end == v || *end || !std::isfinite(duration) || duration < 0) {
+                std::fprintf(stderr, "invalid --seconds: use a finite nonnegative number\n");
+                return 1;
+            }
+        }
         if (optEq(a, "--iface") && v)          { cfg.ifaceIp = v; ++i; }
+        else if (optEq(a, "--routes") && v)    { routesPath = v; ++i; }
         else if (optEq(a, "--config") && v)        { ++i; }   // read in the pre-pass
         else if (optEq(a, "--group") && v)     { cfg.group = v; ++i; }
         else if (optEq(a, "--group") && v)     { cfg.group = v; groupGiven = true; ++i; }
@@ -423,6 +450,44 @@ std::string  sdpInPath;    // recv: derive the stream format from this SDP file
             std::fprintf(stderr, "unknown option: %s\n", a);
             return 1;
         }
+    }
+
+    if (multiCommand) {
+        std::vector<AudioRoute> routes;
+        std::string err;
+        if (routesPath.empty() || !loadAudioRoutes(routesPath, &routes, &err)) {
+            std::fprintf(stderr, "routes: %s\n", routesPath.empty() ? "--routes FILE is required" : err.c_str());
+            return 1;
+        }
+        for (const auto &r : routes)
+            std::printf("%s %s:%u %s PT=%u channels=%d ASIO=%d-%d\n",
+                r.receive ? "rx" : "tx", r.group.c_str(), unsigned(r.port), codecName(r.codec),
+                unsigned(r.payloadType), r.channels, r.asioFirst + 1, r.asioFirst + r.channels);
+        if (cmd == "routes") return 0;
+        MultiBridgeOptions opt;
+        opt.routes = routes; opt.ifaceIp = cfg.ifaceIp; opt.seconds = seconds;
+        if (!shmName.empty()) opt.shmName = shmName;
+        opt.shouldStop = [] { return multiBridgeStop.load(); };
+        std::printf("Experimental 48 kHz / 1 ms / int16 bridge. RX sources must share an RTP epoch.\n"
+                    "Local pacing; no PTP discipline or SAP. Stop with Ctrl+C.\n");
+        if (!SetConsoleCtrlHandler(stopMultiBridge, TRUE)) {
+            std::fprintf(stderr, "cannot install console stop handler\n");
+            return 2;
+        }
+        MultiBridgeStats stats;
+        const bool ok = runMultiBridge(opt, &stats, &err);
+        SetConsoleCtrlHandler(stopMultiBridge, FALSE);
+        std::printf("rx=%llu rejected=%llu timestamp_rejects=%llu tx=%llu tx_errors=%llu\n"
+                    "missing_channel_frames=%llu render_dropped=%llu capture_missing=%llu restarts=%llu schedule_resets=%llu\n",
+            stats.rxPackets, stats.rejectedPackets, stats.timestampRejects, stats.txPackets, stats.txErrors,
+            stats.missingChannelFrames, stats.renderDroppedFrames, stats.captureMissingFrames,
+            stats.restarts, stats.scheduleResets);
+        if (!ok) std::fprintf(stderr, "multibridge: %s\n", err.c_str());
+        return ok ? (stats.txErrors ? 3 : 0) : 2;
+    }
+    if (!routesPath.empty()) {
+        std::fprintf(stderr, "--routes requires routes or multibridge\n");
+        return 1;
     }
 
     // Capture source, resolved once so every branch below sees it: the wav and

@@ -72,6 +72,9 @@ public:
     // Returns bytes read, 0 on timeout, -1 on error.
     int recvFrom(void *buf, size_t cap, int timeoutMs);
 
+    // Poll without the 1 ms SO_RCVTIMEO floor. Single consumer per socket.
+    int recvAvailable(void *buf, size_t cap);
+
     void close();
     bool isOpen() const { return handle_ != kInvalid; }
 

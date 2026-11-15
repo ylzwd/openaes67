@@ -277,6 +277,20 @@ bool UdpSocket::sendTo(const void *data, size_t len,
     return false;
 }
 
+int UdpSocket::recvAvailable(void *buf, size_t cap) {
+    if (handle_ == kInvalid) return -1;
+    const SOCKET socket = static_cast<SOCKET>(handle_);
+    fd_set readable;
+    FD_ZERO(&readable);
+    FD_SET(socket, &readable);
+    timeval timeout{};
+    const int ready = select(0, &readable, nullptr, nullptr, &timeout);
+    if (ready <= 0) return ready;
+    const int bytes = recvfrom(socket, static_cast<char *>(buf), static_cast<int>(cap),
+                               0, nullptr, nullptr);
+    return bytes == SOCKET_ERROR ? -1 : bytes;
+}
+
 int UdpSocket::recvFrom(void *buf, size_t cap, int timeoutMs) {
     if (handle_ == kInvalid) {
         return -1;
